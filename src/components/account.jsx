@@ -267,7 +267,7 @@ function OrderModal({ order, onClose }) {
 }
 
 export function AccountView() {
-  const { user, logout, updateProfile } = useAuth();
+  const { user, logout, updateProfile, ready: authReady } = useAuth();
   const { toast } = useToast();
   const { openAuth } = useAuthModal();
   const router = useRouter();
@@ -361,6 +361,14 @@ export function AccountView() {
       setSaving(false);
     }
   };
+
+  if (!authReady) {
+    return (
+      <div className="max-w-[560px] mx-auto px-5 py-24 text-center text-[14px] text-neutral-500">
+        Loading account…
+      </div>
+    );
+  }
 
   if (!user) return (
     <div className="max-w-[560px] mx-auto px-5 py-24 text-center">

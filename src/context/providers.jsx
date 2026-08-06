@@ -37,11 +37,12 @@ function CartProvider({ children }) {
   const remove = (key) => setItems((c) => c.filter((i) => i.key !== key));
   const setQty = (key, d) => setItems((c) => c.map((i) => i.key === key ? { ...i, qty: Math.max(1, i.qty + d) } : i));
   const clear = () => setItems([]);
-  const count = items.reduce((n, i) => n + i.qty, 0);
+  // Avoid hydration mismatch: server always 0 until client has read localStorage
+  const count = ready ? items.reduce((n, i) => n + i.qty, 0) : 0;
   const subtotal = items.reduce((n, i) => n + i.price * i.qty, 0);
 
   return (
-    <CartCtx.Provider value={{ items, add, remove, setQty, clear, count, subtotal, open, setOpen }}>
+    <CartCtx.Provider value={{ items: ready ? items : [], add, remove, setQty, clear, count, subtotal, open, setOpen, ready }}>
       {children}
     </CartCtx.Provider>
   );
@@ -56,13 +57,22 @@ function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
   const [sessionUser, setSessionUser] = useState(null); // real Supabase auth.users row
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminReady, setAdminReady] = useState(!hasSupabase);
+  const [adminReady, setAdminReady] = useState(false);
 
-  useEffect(() => {
-    try { const s = localStorage.getItem("dg_user"); if (s) setUser(JSON.parse(s)); } catch {}
-    setReady(true);
-  }, []);
   const persist = (u) => { setUser(u); try { u ? localStorage.setItem("dg_user", JSON.stringify(u)) : localStorage.removeItem("dg_user"); } catch {} };
+
+  // Mark client mounted — keep user null on SSR + first client paint (hydration-safe)
+  useEffect(() => {
+    if (!hasSupabase) {
+      try {
+        const s = localStorage.getItem("dg_user");
+        if (s) setUser(JSON.parse(s));
+      } catch {}
+      setAdminReady(true);
+      setReady(true);
+    }
+    // With Supabase, `ready` is set after the first session sync below
+  }, []);
 
   // Track the real Supabase session (separate from the local demo `user`
   // above) so RLS-gated admin checks reflect who is actually signed in.
@@ -79,7 +89,6 @@ function AuthProvider({ children }) {
       setAdminReady(false);
       try {
         if (authUser) {
-          // Don't let profile/address sync block admin detection (menu shortcut).
           void flushPendingProfile(authUser);
           try {
             const profile = await fetchMyProfile(authUser);
@@ -101,16 +110,17 @@ function AuthProvider({ children }) {
           if (!cancelled) setIsAdmin(false);
         }
       } finally {
-        if (!cancelled) setAdminReady(true);
+        if (!cancelled) {
+          setAdminReady(true);
+          setReady(true);
+        }
       }
     };
 
-    // Recover session from email-confirm hash (#access_token=…) if present
     const boot = async () => {
       if (typeof window !== "undefined" && window.location.hash?.includes("access_token")) {
         const path = window.location.pathname || "/";
         if (!path.startsWith("/auth/callback")) {
-          // Send confirm links that land on "/" to the dedicated callback handler
           window.location.replace(`/auth/callback${window.location.hash}`);
           return;
         }
@@ -119,7 +129,11 @@ function AuthProvider({ children }) {
       await syncAdmin(data?.session?.user || null);
     };
     boot();
-    const { data: sub } = sb.auth.onAuthStateChange((_event, session) => syncAdmin(session?.user || null));
+    const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
+      // Skip the initial event — boot() already handled it (avoids double fetch races)
+      if (event === "INITIAL_SESSION") return;
+      syncAdmin(session?.user || null);
+    });
     return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

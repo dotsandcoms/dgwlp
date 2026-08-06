@@ -14,13 +14,15 @@ const LINKS = [["HOME", "/"], ["ABOUT", "/about"], ["SHOP", "/shop"], ["CONTACT"
 
 /** Person icon menu — Register / Sign in when logged out; account links when signed in. */
 function AccountMenu({ align = "right" }) {
-  const { user, logout, isAdmin, adminReady } = useAuth();
+  const { user, logout, isAdmin, adminReady, ready } = useAuth();
   const { toast } = useToast();
   const { openAuth } = useAuthModal();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const showAdmin = Boolean(user && adminReady && isAdmin);
+  // Null until auth has hydrated — keeps SSR HTML matching the first client paint
+  const liveUser = ready ? user : null;
+  const showAdmin = Boolean(liveUser && adminReady && isAdmin);
 
   useEffect(() => {
     if (!open) return;
@@ -64,10 +66,10 @@ function AccountMenu({ align = "right" }) {
         style={{ fontFamily: HEAD }}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={user ? "Account menu" : "Sign in or register"}
+        aria-label={liveUser ? "Account menu" : "Sign in or register"}
       >
         <User size={18} />
-        {user ? <span className="hidden sm:inline">{user.name.split(" ")[0]}</span> : null}
+        {liveUser ? <span className="hidden sm:inline">{(liveUser.name || "").split(" ")[0] || "Account"}</span> : null}
       </button>
       {open && (
         <div
@@ -79,7 +81,7 @@ function AccountMenu({ align = "right" }) {
             borderRadius: 6,
           }}
         >
-          {user ? (
+          {liveUser ? (
             <>
               <button type="button" role="menuitem" onClick={() => go("/account")} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-neutral-50" style={{ fontFamily: HEAD }}>
                 My account
@@ -92,7 +94,7 @@ function AccountMenu({ align = "right" }) {
                   className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-neutral-50"
                   style={{ fontFamily: HEAD, color: C.green }}
                 >
-                  Store console
+                  Admin
                 </button>
               )}
               <button type="button" role="menuitem" onClick={signOut} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-neutral-50 text-neutral-600" style={{ fontFamily: HEAD }}>
@@ -248,10 +250,11 @@ export function Header() {
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const cart = useCart();
-  const { user, isAdmin, adminReady } = useAuth();
+  const { user, isAdmin, adminReady, ready: authReady } = useAuth();
   const { openAuth } = useAuthModal();
   const active = (href) => href === "/" ? path === "/" : path.startsWith(href);
-  const showAdmin = Boolean(user && adminReady && isAdmin);
+  const liveUser = authReady ? user : null;
+  const showAdmin = Boolean(liveUser && adminReady && isAdmin);
   return (
     <>
       <header className="sticky top-0 z-40" style={{ background: "rgba(255,255,255,.92)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${C.line}` }}>
@@ -288,12 +291,12 @@ export function Header() {
           <div className="flex-1 flex flex-col gap-2 p-6" style={{ fontFamily: HEAD, letterSpacing: ".08em" }}>
             {LINKS.map(([l, href]) => <Link key={href} href={href} onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>{l}</Link>)}
             <button onClick={() => { setOpen(false); setSearchOpen(true); }} className="text-left text-[20px] py-3 flex items-center gap-2" style={{ borderBottom: `1px solid ${C.line}` }}><Search size={20} /> SEARCH</button>
-            {user ? (
+            {liveUser ? (
               <>
                 <Link href="/account" onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>MY ACCOUNT</Link>
                 {showAdmin && (
                   <Link href={adminPath()} onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}`, color: C.green }}>
-                    STORE CONSOLE
+                    ADMIN
                   </Link>
                 )}
               </>

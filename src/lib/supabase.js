@@ -1,25 +1,25 @@
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * Next.js only inlines env vars that start with NEXT_PUBLIC_ into the
- * browser bundle. Prefer those names on Vercel.
- * Server-only aliases (SUPABASE_URL / SUPABASE_ANON_KEY) are accepted as a
- * fallback so SSR catalogue reads still work if PUBLIC_ was stripped by mistake.
+ * Next.js only inlines env vars that are written as static property access
+ * (process.env.NEXT_PUBLIC_FOO). Dynamic process.env[name] is empty in the
+ * browser bundle — that previously forced Demo admin / mock data on the client.
+ *
+ * Prefer NEXT_PUBLIC_* names. Server-only aliases are fallbacks for SSR.
  */
-function env(name) {
-  const v = process.env[name];
-  return typeof v === "string" ? v.trim() : "";
-}
+const url = (
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  ""
+).trim();
 
-// Trailing newlines/spaces from Vercel/dashboard pastes break CSS url(...) images.
-const url =
-  env("NEXT_PUBLIC_SUPABASE_URL") ||
-  env("NEXT_SUPABASE_URL") ||
-  env("SUPABASE_URL");
-const anon =
-  env("NEXT_PUBLIC_SUPABASE_ANON_KEY") ||
-  env("NEXT_SUPABASE_ANON_KEY") ||
-  env("SUPABASE_ANON_KEY");
+const anon = (
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.NEXT_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  ""
+).trim();
 
 export const hasSupabase = Boolean(url && anon);
 

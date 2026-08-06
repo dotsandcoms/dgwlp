@@ -1,18 +1,31 @@
 "use client";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search } from "lucide-react";
+import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, SCALE, ROOMS, CATEGORY_NAMES, rangeOf } from "@/lib/pricing";
+import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, ROOMS, CATEGORY_NAMES, rangeOf, artPlacement } from "@/lib/pricing";
 import { MOCK_PRODUCTS, MOCK_ORDERS, SALES } from "@/lib/mock";
 import { hasSupabase, imageUrl } from "@/lib/supabase";
 import { friendlyError } from "@/lib/errors";
 import * as db from "@/lib/admin-data";
 import { Plate, Scene, artworkStyle, Pill, StatusBadge } from "./primitives";
-import { useToast, useAuth } from "@/context/providers";
+import { LiveSettings, DemoSettings } from "./admin-settings";
+import { useToast, useAuth, useAuthModal } from "@/context/providers";
+import { adminPath } from "@/lib/admin-path";
 
 export function AdminApp() {
-  return hasSupabase ? <LiveAdminGate /> : <DemoAdminApp />;
+  // Never expose the demo admin console in production.
+  if (hasSupabase) return <LiveAdminGate />;
+  if (process.env.NODE_ENV === "production") {
+    return (
+      <div className="max-w-[520px] mx-auto px-5 py-24 text-center">
+        <Lock size={26} color={C.gray} className="mx-auto mb-4" />
+        <h1 className="text-[22px] mb-2" style={{ fontFamily: HEAD }}>Not found</h1>
+        <p className="text-[14px] text-neutral-600">This page is not available.</p>
+      </div>
+    );
+  }
+  return <DemoAdminApp />;
 }
 
 /* =====================================================================
@@ -21,6 +34,7 @@ export function AdminApp() {
 function LiveAdminGate() {
   const router = useRouter();
   const { sessionUser, isAdmin, adminReady } = useAuth();
+  const { openAuth } = useAuthModal();
 
   if (!adminReady) {
     return <div className="max-w-[1240px] mx-auto px-5 py-24 text-center text-neutral-500 text-[14px] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Checking access…</div>;
@@ -31,7 +45,7 @@ function LiveAdminGate() {
         <Lock size={26} color={C.gray} className="mx-auto mb-4" />
         <h1 className="text-[22px] mb-2" style={{ fontFamily: HEAD }}>Sign in required</h1>
         <p className="text-[14px] text-neutral-600 mb-6">Sign in with an admin account to manage products &amp; orders.</p>
-        <Pill onClick={() => router.push("/auth?next=/admin")}>Sign in →</Pill>
+        <Pill onClick={() => openAuth("login", adminPath())}>Sign in →</Pill>
       </div>
     );
   }
@@ -40,9 +54,8 @@ function LiveAdminGate() {
       <div className="max-w-[560px] mx-auto px-5 py-24 text-center">
         <Lock size={26} color={C.gray} className="mx-auto mb-4" />
         <h1 className="text-[22px] mb-2" style={{ fontFamily: HEAD }}>Not authorized</h1>
-        <p className="text-[14px] text-neutral-600 mb-4">Signed in as {sessionUser.email}, but this account isn't an admin yet.</p>
-        <p className="text-[12px] text-neutral-500 mb-2">Ask an existing admin to run this in the Supabase SQL Editor:</p>
-        <pre className="text-[11px] bg-neutral-50 p-3 rounded text-left overflow-x-auto" style={{ border: `1px solid ${C.line}` }}>{`insert into admins (user_id)\nselect id from auth.users where email = '${sessionUser.email}';`}</pre>
+        <p className="text-[14px] text-neutral-600 mb-4">This account does not have access to the store console.</p>
+        <Pill onClick={() => router.push("/")}>Back to site</Pill>
       </div>
     );
   }
@@ -71,7 +84,7 @@ function LiveAdminApp() {
       .finally(() => setLoading(false));
   }, [toast]);
 
-  const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["categories", "Categories", Tag]];
+  const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["categories", "Categories", Tag], ["settings", "Settings", Settings]];
   const openEditor = (id = null) => { setEditingId(id); setView("editor"); };
 
   return (
@@ -94,6 +107,7 @@ function LiveAdminApp() {
         {view === "editor" && <LiveEditor editingId={editingId} categories={categories} toast={toast} onSaved={() => { reloadProducts(); setView("products"); }} />}
         {view === "orders" && <LiveOrders orders={orders} onChanged={reloadOrders} toast={toast} />}
         {view === "categories" && <LiveCategories categories={categories} onChanged={reloadCategories} toast={toast} />}
+        {view === "settings" && <LiveSettings toast={toast} />}
       </>)}
     </div>
   );
@@ -432,9 +446,15 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
         <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
           <div style={{ position: "relative", width: "100%", aspectRatio: "4/3" }}>
             <Scene room={firstRoom} />
-            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-52%)", width: `${SCALE[onSizes[onSizes.length - 1] || RATIOS[ratio].sizes[0]] || 50}%` }}>
-              <div style={artworkStyle(onMats.find((m) => m.framed) ? "paper_framed" : "paper", "black")}><Plate product={preview} showSig={false} style={{ width: "100%", aspectRatio: RATIOS[ratio].ar }} /></div>
-            </div>
+            {(() => {
+              const sz = onSizes[onSizes.length - 1] || RATIOS[ratio].sizes[0];
+              const place = artPlacement(sz, firstRoom, ratio);
+              return (
+                <div style={{ position: "absolute", top: `${place.topPct}%`, left: `${place.leftPct}%`, transform: "translate(-50%,-50%)", width: `${place.widthPct}%` }}>
+                  <div style={artworkStyle(onMats.find((m) => m.framed) ? "paper_framed" : "paper", "black")}><Plate product={preview} showSig={false} style={{ width: "100%", aspectRatio: RATIOS[ratio].ar }} /></div>
+                </div>
+              );
+            })()}
           </div>
           <div className="p-4">
             <div className="text-[16px]" style={{ fontFamily: HEAD, color: C.green }}>{(name || "New Print").toUpperCase()}</div>
@@ -464,7 +484,7 @@ function DemoAdminApp() {
   const router = useRouter();
   const { toast } = useToast();
   const [view, setView] = useState("dashboard");
-  const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["categories", "Categories", Tag]];
+  const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["categories", "Categories", Tag], ["settings", "Settings", Settings]];
   return (
     <div className="max-w-[1240px] mx-auto px-5 py-8">
       <div className="mb-4 p-3 rounded text-[12px]" style={{ background: C.greenSoft, color: C.greenDark }}>Demo admin — running on sample data. Connect Supabase to manage real products & orders.</div>
@@ -482,6 +502,7 @@ function DemoAdminApp() {
       {view === "editor" && <DemoEditor toast={toast} />}
       {view === "orders" && <DemoOrders />}
       {view === "categories" && <DemoCategories toast={toast} />}
+      {view === "settings" && <DemoSettings toast={toast} />}
     </div>
   );
 }
@@ -634,9 +655,15 @@ function DemoEditor({ toast }) {
         <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
           <div style={{ position: "relative", width: "100%", aspectRatio: "4/3" }}>
             <Scene room={firstRoom} />
-            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-52%)", width: `${SCALE[onSizes[onSizes.length - 1] || RATIOS[ratio].sizes[0]] || 50}%` }}>
-              <div style={artworkStyle(onMats.find((m) => m.framed) ? "paper_framed" : "paper", "black")}><Plate product={preview} showSig={false} style={{ width: "100%", aspectRatio: RATIOS[ratio].ar }} /></div>
-            </div>
+            {(() => {
+              const sz = onSizes[onSizes.length - 1] || RATIOS[ratio].sizes[0];
+              const place = artPlacement(sz, firstRoom, ratio);
+              return (
+                <div style={{ position: "absolute", top: `${place.topPct}%`, left: `${place.leftPct}%`, transform: "translate(-50%,-50%)", width: `${place.widthPct}%` }}>
+                  <div style={artworkStyle(onMats.find((m) => m.framed) ? "paper_framed" : "paper", "black")}><Plate product={preview} showSig={false} style={{ width: "100%", aspectRatio: RATIOS[ratio].ar }} /></div>
+                </div>
+              );
+            })()}
           </div>
           <div className="p-4">
             <div className="text-[16px]" style={{ fontFamily: HEAD, color: C.green }}>{(name || "New Print").toUpperCase()}</div>

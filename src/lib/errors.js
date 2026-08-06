@@ -2,6 +2,7 @@
 // Toasts should never show a stack trace or a Postgres constraint name.
 const KNOWN = [
   [/invalid login credentials/i, "That email or password isn't right."],
+  [/check your email/i, "Check your email to confirm your account, then sign in."],
   [/email not confirmed/i, "Please confirm your email first — check your inbox for the link."],
   [/user already registered/i, "An account with that email already exists — try signing in instead."],
   [/password should be at least/i, "Please use a longer password (at least 6 characters)."],
@@ -19,5 +20,7 @@ const KNOWN = [
 export function friendlyError(err, fallback = "Something went wrong — please try again.") {
   const raw = (err && (err.message || err.error_description || err.msg)) || (typeof err === "string" ? err : "");
   for (const [pattern, text] of KNOWN) if (pattern.test(raw)) return text;
+  // Prefer intentional, plain-language Error messages over a generic fallback
+  if (raw && raw.length < 180 && !/postgres|PGRST|violates|stack|undefined/i.test(raw)) return raw;
   return fallback;
 }

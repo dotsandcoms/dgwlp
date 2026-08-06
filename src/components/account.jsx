@@ -4,33 +4,34 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   User, LogOut, MapPin, Package, Heart, ChevronRight, X,
-  Truck, CreditCard, CheckCircle2, Circle, ShoppingBag,
+  Truck, CreditCard, CheckCircle2, Circle, ShoppingBag, Pencil, Loader2,
 } from "lucide-react";
 import { C, HEAD, zar } from "@/lib/pricing";
 import { MOCK_ORDERS } from "@/lib/mock";
 import { Pill, StatusBadge, Plate, Reveal } from "./primitives";
-import { RegisterForm, LoginForm } from "./forms";
-import { useAuth, useToast } from "@/context/providers";
+import { AddressFields } from "./address-fields";
+import { emptyAddress } from "@/lib/address";
+import { useAuth, useToast, useAuthModal } from "@/context/providers";
 import { friendlyError } from "@/lib/errors";
 
+/** Opens the auth modal from /auth?tab=&next= then returns to the previous page (or home). */
 export function AuthView() {
-  const { register, login } = useAuth();
-  const { toast } = useToast();
+  const { openAuth } = useAuthModal();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/account";
-  const [tab, setTab] = useState("register");
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    const rawNext = searchParams.get("next") || "/account";
+    const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/account";
+    const mode = tab === "register" ? "register" : "login";
+    openAuth(mode, next);
+    router.replace("/");
+  }, [openAuth, router, searchParams]);
+
   return (
-    <div className="max-w-[560px] mx-auto px-5 py-12">
-      <h1 className="text-[34px] mb-6" style={{ fontFamily: HEAD, fontWeight: 300 }}>{tab === "register" ? "CREATE ACCOUNT" : "SIGN IN"}</h1>
-      <div className="flex gap-2 mb-6">
-        {[["register", "Register"], ["login", "Sign in"]].map(([id, l]) => (
-          <button key={id} onClick={() => setTab(id)} className="text-[13px] px-4 py-2 rounded-full" style={{ background: tab === id ? C.green : "transparent", color: tab === id ? "#fff" : C.gray, border: `1px solid ${tab === id ? C.green : C.line}`, fontFamily: HEAD }}>{l}</button>
-        ))}
-      </div>
-      {tab === "register"
-        ? <RegisterForm onDone={async (d) => { try { await register(d); toast(`Welcome, ${d.name.split(" ")[0]}`); router.push(next); } catch (e) { toast(friendlyError(e, "Could not create account")); } }} />
-        : <LoginForm onDone={async (d) => { try { await login(d); toast("Welcome back"); router.push(next); } catch (e) { toast(friendlyError(e, "Sign in failed")); } }} />}
+    <div className="min-h-[40vh] flex items-center justify-center text-[14px] text-neutral-500">
+      Opening…
     </div>
   );
 }
@@ -82,6 +83,77 @@ function statusSteps(status) {
   }[String(status || "").toLowerCase()] || status;
   const idx = Math.max(0, order.indexOf(normalised));
   return order.map((label, i) => ({ label, done: i <= idx, current: i === idx }));
+}
+
+function ProfileEditModal({ user, form, setForm, saving, onSave, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape" && !saving) onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose, saving]);
+
+  const inp = {
+    className: "w-full py-3 px-3 text-[14px] outline-none bg-white",
+    style: { border: `1px solid ${C.line}`, borderRadius: 4 },
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="profile-edit-title">
+      <button
+        type="button"
+        aria-label="Close"
+        className="absolute inset-0"
+        style={{ background: "rgba(20,20,18,.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+        onClick={() => { if (!saving) onClose(); }}
+      />
+      <div
+        className="relative w-full sm:max-w-[520px] max-h-[92vh] bg-white flex flex-col overflow-hidden sm:rounded-2xl rounded-t-2xl"
+        style={{ boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}
+      >
+        <div className="shrink-0 px-5 sm:px-6 pt-5 pb-4 flex items-start justify-between gap-4" style={{ borderBottom: `1px solid ${C.line}`, background: `linear-gradient(180deg, ${C.greenSoft}, #fff 88%)` }}>
+          <div>
+            <p className="text-[11px] tracking-[.2em] mb-1" style={{ fontFamily: HEAD, color: C.green }}>COLLECTOR ACCOUNT</p>
+            <h2 id="profile-edit-title" className="text-[26px] leading-none" style={{ fontFamily: HEAD, fontWeight: 300 }}>Edit profile</h2>
+            <p className="text-[13px] text-neutral-500 mt-2">Update your details and default delivery address.</p>
+          </div>
+          <button type="button" onClick={() => { if (!saving) onClose(); }} aria-label="Close" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 shrink-0">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
+          <label className="block mb-3">
+            <span className="block text-[11px] tracking-[.08em] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>FULL NAME</span>
+            <input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} {...inp} />
+          </label>
+          <label className="block mb-3">
+            <span className="block text-[11px] tracking-[.08em] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>EMAIL</span>
+            <input value={user.email} disabled className={inp.className} style={{ ...inp.style, opacity: 0.6, background: "#f7f7f5" }} />
+          </label>
+          <label className="block mb-5">
+            <span className="block text-[11px] tracking-[.08em] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>MOBILE</span>
+            <input value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} placeholder="Mobile number" {...inp} />
+          </label>
+
+          <AddressFields
+            key="account-edit-address"
+            value={form.address}
+            onChange={(address) => setForm((prev) => ({ ...prev, address }))}
+          />
+        </div>
+
+        <div className="shrink-0 px-5 sm:px-6 py-4 flex flex-wrap gap-2" style={{ borderTop: `1px solid ${C.line}`, background: "#fff" }}>
+          <Pill onClick={onSave} disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+            {saving ? "Saving…" : "Save changes"}
+          </Pill>
+          <Pill variant="outline" onClick={onClose} disabled={saving}>Cancel</Pill>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function OrderModal({ order, onClose }) {
@@ -157,6 +229,7 @@ function OrderModal({ order, onClose }) {
                   {d.suburb && <>{d.suburb}<br /></>}
                   {d.city}, {d.province}<br />
                   {d.postal}
+                  {d.notes && <span className="block text-neutral-500 mt-2">{d.notes}</span>}
                 </p>
               ) : (
                 <p className="text-[13px] text-neutral-500">No address on file for this order.</p>
@@ -193,12 +266,16 @@ function OrderModal({ order, onClose }) {
 }
 
 export function AccountView() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
   const { toast } = useToast();
+  const { openAuth } = useAuthModal();
   const router = useRouter();
   const [orders, setOrders] = useState([]);
   const [wishCount, setWishCount] = useState(0);
   const [selected, setSelected] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: "", phone: "", address: emptyAddress() });
 
   useEffect(() => {
     setOrders(loadOrders());
@@ -208,13 +285,69 @@ export function AccountView() {
     } catch { setWishCount(0); }
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    setForm({
+      name: user.name || "",
+      phone: user.phone || "",
+      address: { ...emptyAddress(), ...(user.address || {}) },
+    });
+  }, [user]);
+
   const closeModal = useCallback(() => setSelected(null), []);
+
+  const startEdit = () => {
+    setForm({
+      name: user.name || "",
+      phone: user.phone || "",
+      address: { ...emptyAddress(), ...(user.address || {}) },
+    });
+    setEditing(true);
+  };
+
+  const saveProfile = async () => {
+    if (!form.name.trim()) {
+      toast("Please enter your name");
+      return;
+    }
+    const a = form.address || {};
+    if (a.street || a.city || a.postal) {
+      if (!a.street?.trim() || !a.city?.trim() || !a.postal?.trim()) {
+        toast("Please complete street, city and postal code");
+        return;
+      }
+    }
+    setSaving(true);
+    try {
+      await updateProfile({
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        address: {
+          street: (a.street || "").trim(),
+          suburb: (a.suburb || "").trim(),
+          city: (a.city || "").trim(),
+          province: a.province || "",
+          postal: (a.postal || "").trim(),
+          notes: (a.notes || "").trim(),
+        },
+      });
+      toast("Profile saved");
+      setEditing(false);
+    } catch (e) {
+      toast(friendlyError(e, "Could not save profile — run fix_register_profile_address.sql if needed"));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!user) return (
     <div className="max-w-[560px] mx-auto px-5 py-24 text-center">
       <User size={38} color={C.gray} className="mx-auto mb-5" />
       <h2 className="text-[26px] mb-3" style={{ fontFamily: HEAD, fontWeight: 300 }}>You're not signed in</h2>
-      <Pill onClick={() => router.push("/auth")}>Sign in or register</Pill>
+      <div className="flex flex-wrap justify-center gap-3">
+        <Pill onClick={() => openAuth("login", "/account")}>Sign in</Pill>
+        <Pill variant="outline" onClick={() => openAuth("register", "/account")}>Create account</Pill>
+      </div>
     </div>
   );
 
@@ -262,28 +395,46 @@ export function AccountView() {
           <aside className="lg:col-span-4 space-y-5">
             <Reveal>
               <div className="p-6" style={{ border: `1px solid ${C.line}`, borderRadius: 8, background: "#fff" }}>
-                <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ background: C.greenSoft, color: C.green }}>
-                  <User size={22} />
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: C.greenSoft, color: C.green }}>
+                    <User size={22} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={startEdit}
+                    className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-full"
+                    style={{ border: `1px solid ${C.line}`, fontFamily: HEAD, color: C.ink }}
+                  >
+                    <Pencil size={12} /> Edit
+                  </button>
                 </div>
                 <h3 className="text-[12px] tracking-[.14em] mb-3 text-neutral-500" style={{ fontFamily: HEAD }}>PROFILE</h3>
                 <div className="text-[18px] mb-1" style={{ fontFamily: HEAD }}>{user.name}</div>
                 <div className="text-[13px] text-neutral-600">{user.email}</div>
-                {user.phone && <div className="text-[13px] text-neutral-600 mt-0.5">{user.phone}</div>}
+                {user.phone
+                  ? <div className="text-[13px] text-neutral-600 mt-0.5">{user.phone}</div>
+                  : <div className="text-[12px] text-neutral-400 mt-1">No mobile number yet</div>}
               </div>
             </Reveal>
 
             <Reveal delay={80}>
               <div className="p-6" style={{ border: `1px solid ${C.line}`, borderRadius: 8, background: "#fff" }}>
-                <h3 className="text-[12px] tracking-[.14em] mb-3 text-neutral-500 flex items-center gap-1.5" style={{ fontFamily: HEAD }}><MapPin size={13} /> DEFAULT DELIVERY</h3>
-                {user.address ? (
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <h3 className="text-[12px] tracking-[.14em] text-neutral-500 flex items-center gap-1.5" style={{ fontFamily: HEAD }}><MapPin size={13} /> DEFAULT DELIVERY</h3>
+                  <button type="button" onClick={startEdit} className="text-[12px]" style={{ color: C.green, fontFamily: HEAD }}>
+                    {user.address ? "Edit" : "Add"}
+                  </button>
+                </div>
+                {user.address?.street ? (
                   <div className="text-[13px] text-neutral-700 leading-relaxed">
                     {user.address.street}<br />
                     {user.address.suburb && <>{user.address.suburb}<br /></>}
-                    {user.address.city}, {user.address.province}<br />
+                    {user.address.city}{user.address.province ? `, ${user.address.province}` : ""}<br />
                     {user.address.postal}
+                    {user.address.notes && <div className="text-neutral-500 mt-2">{user.address.notes}</div>}
                   </div>
                 ) : (
-                  <p className="text-[13px] text-neutral-500">Add an address at checkout — it will appear here for next time.</p>
+                  <p className="text-[13px] text-neutral-500">No delivery address yet — tap Add to save one for checkout.</p>
                 )}
               </div>
             </Reveal>
@@ -357,6 +508,16 @@ export function AccountView() {
       </div>
 
       {selected && <OrderModal order={selected} onClose={closeModal} />}
+      {editing && (
+        <ProfileEditModal
+          user={user}
+          form={form}
+          setForm={setForm}
+          saving={saving}
+          onSave={saveProfile}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </div>
   );
 }

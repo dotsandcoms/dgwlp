@@ -5,11 +5,102 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, ShoppingBag, User, Minus, Plus, Trash2, Check, ShieldCheck, Mail, Search } from "lucide-react";
 import { C, HEAD, zar } from "@/lib/pricing";
 import { Plate, Pill, Row } from "./primitives";
-import { useCart, useAuth, useToast } from "@/context/providers";
+import { useCart, useAuth, useToast, useAuthModal } from "@/context/providers";
 import { browserClient, hasSupabase, imageUrl } from "@/lib/supabase";
 import { MOCK_PRODUCTS } from "@/lib/mock";
 
 const LINKS = [["HOME", "/"], ["ABOUT", "/about"], ["SHOP", "/shop"], ["CONTACT", "/contact"]];
+
+/** Person icon menu — Register / Sign in when logged out; account links when signed in. */
+function AccountMenu({ align = "right" }) {
+  const { user, logout } = useAuth();
+  const { toast } = useToast();
+  const { openAuth } = useAuthModal();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const go = (href) => {
+    setOpen(false);
+    router.push(href);
+  };
+
+  const openForm = (mode) => {
+    setOpen(false);
+    openAuth(mode, "/account");
+  };
+
+  const signOut = async () => {
+    setOpen(false);
+    try {
+      await logout();
+      toast("Signed out");
+      router.push("/");
+    } catch {
+      toast("Could not sign out");
+    }
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="hover:opacity-60 flex items-center gap-1 text-[13px]"
+        style={{ fontFamily: HEAD }}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={user ? "Account menu" : "Sign in or register"}
+      >
+        <User size={18} />
+        {user ? <span className="hidden sm:inline">{user.name.split(" ")[0]}</span> : null}
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute top-full mt-2 min-w-[180px] py-1.5 bg-white shadow-lg z-50"
+          style={{
+            [align === "left" ? "left" : "right"]: 0,
+            border: `1px solid ${C.line}`,
+            borderRadius: 6,
+          }}
+        >
+          {user ? (
+            <>
+              <button type="button" role="menuitem" onClick={() => go("/account")} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-neutral-50" style={{ fontFamily: HEAD }}>
+                My account
+              </button>
+              <button type="button" role="menuitem" onClick={signOut} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-neutral-50 text-neutral-600" style={{ fontFamily: HEAD }}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" role="menuitem" onClick={() => openForm("register")} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-neutral-50" style={{ fontFamily: HEAD }}>
+                Register
+              </button>
+              <button type="button" role="menuitem" onClick={() => openForm("login")} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-neutral-50" style={{ fontFamily: HEAD }}>
+                Sign in
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function matchQuery(p, q) {
   if (!q) return true;
@@ -145,6 +236,7 @@ export function Header() {
   const [searchOpen, setSearchOpen] = useState(false);
   const cart = useCart();
   const { user } = useAuth();
+  const { openAuth } = useAuthModal();
   const active = (href) => href === "/" ? path === "/" : path.startsWith(href);
   return (
     <>
@@ -156,14 +248,14 @@ export function Header() {
           <nav className="hidden md:flex items-center gap-8" style={{ fontFamily: HEAD, letterSpacing: ".08em" }}>
             {LINKS.map(([l, href]) => <Link key={href} href={href} className="text-[14px] hover:opacity-60" style={{ color: active(href) ? C.green : C.ink }}>{l}</Link>)}
             <button onClick={() => setSearchOpen(true)} className="hover:opacity-60" aria-label="Search" title="Search"><Search size={18} /></button>
-            <Link href={user ? "/account" : "/auth"} className="hover:opacity-60 flex items-center gap-1 text-[13px]" style={{ fontFamily: HEAD }}><User size={18} />{user ? user.name.split(" ")[0] : ""}</Link>
+            <AccountMenu />
             <button onClick={() => cart.setOpen(true)} className="relative hover:opacity-60">
               <ShoppingBag size={19} />
               {cart.count > 0 && <span className="absolute -top-2 -right-2 text-[10px] text-white rounded-full w-[17px] h-[17px] flex items-center justify-center" style={{ background: C.green }}>{cart.count}</span>}
             </button>
-            <Link href="/admin" className="text-[12px] px-3 py-1.5 rounded-full" style={{ border: `1px solid ${C.line}`, color: active("/admin") ? C.green : C.gray }}>ADMIN</Link>
           </nav>
           <div className="flex items-center gap-4 md:hidden">
+            <AccountMenu />
             <button onClick={() => setSearchOpen(true)} aria-label="Search"><Search size={20} /></button>
             <button onClick={() => cart.setOpen(true)} className="relative"><ShoppingBag size={20} />
               {cart.count > 0 && <span className="absolute -top-2 -right-2 text-[10px] text-white rounded-full w-[16px] h-[16px] flex items-center justify-center" style={{ background: C.green }}>{cart.count}</span>}
@@ -182,8 +274,14 @@ export function Header() {
           <div className="flex-1 flex flex-col gap-2 p-6" style={{ fontFamily: HEAD, letterSpacing: ".08em" }}>
             {LINKS.map(([l, href]) => <Link key={href} href={href} onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>{l}</Link>)}
             <button onClick={() => { setOpen(false); setSearchOpen(true); }} className="text-left text-[20px] py-3 flex items-center gap-2" style={{ borderBottom: `1px solid ${C.line}` }}><Search size={20} /> SEARCH</button>
-            <Link href={user ? "/account" : "/auth"} onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>{user ? "MY ACCOUNT" : "SIGN IN / REGISTER"}</Link>
-            <Link href="/admin" onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ color: C.green }}>ADMIN PANEL</Link>
+            {user ? (
+              <Link href="/account" onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>MY ACCOUNT</Link>
+            ) : (
+              <>
+                <button type="button" onClick={() => { setOpen(false); openAuth("register"); }} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>REGISTER</button>
+                <button type="button" onClick={() => { setOpen(false); openAuth("login"); }} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>SIGN IN</button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -280,7 +378,13 @@ export function Footer() {
           <div className="flex items-center gap-2 opacity-80"><Mail size={15} /> Receipts via Resend</div>
         </div>
       </div>
-      <div className="text-center text-[11px] py-5 opacity-50" style={{ borderTop: "1px solid #333" }}>© 2026 Doron Goldstein Photography</div>
+      <div className="text-center text-[11px] py-5 opacity-50 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3" style={{ borderTop: "1px solid #333" }}>
+        <span>© 2026 Doron Goldstein Photography</span>
+        <span className="hidden sm:inline opacity-40">·</span>
+        <a href="https://dotsandcoms.co.za" target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-80 transition-opacity">
+          Developed by Dotsandcoms
+        </a>
+      </div>
     </footer>
   );
 }

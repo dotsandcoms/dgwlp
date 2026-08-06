@@ -168,7 +168,7 @@ export function About() {
 
 export function Contact() {
   const { toast } = useToast();
-  const [f, setF] = useState({ name: "", email: "", subject: "", msg: "" });
+  const [f, setF] = useState({ name: "", email: "", subject: "", msg: "", company: "" });
   const [sending, setSending] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const inp = {
@@ -176,17 +176,40 @@ export function Contact() {
     style: { border: `1px solid ${C.line}`, borderRadius: 4 },
   };
 
-  const submit = () => {
+  const submit = async () => {
+    if (f.company) {
+      toast("Message sent — Doron will be in touch");
+      return;
+    }
     if (!f.name.trim() || !f.email.trim() || !f.msg.trim()) {
       toast("Please fill in your name, email and message");
       return;
     }
     setSending(true);
-    setTimeout(() => {
-      setF({ name: "", email: "", subject: "", msg: "" });
-      setSending(false);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: f.name.trim(),
+          email: f.email.trim(),
+          subject: f.subject.trim(),
+          msg: f.msg.trim(),
+          company: f.company,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast(data.error === "Too many requests" ? "Please wait a moment before sending again" : "Could not send — try again shortly");
+        return;
+      }
+      setF({ name: "", email: "", subject: "", msg: "", company: "" });
       toast("Message sent — Doron will be in touch");
-    }, 450);
+    } catch {
+      toast("Could not send — check your connection");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -281,8 +304,12 @@ export function Contact() {
                 <p className="text-[13px] text-neutral-500 mb-6">We’ll get back to you as soon as we can.</p>
 
                 <div className="grid sm:grid-cols-2 gap-3 mb-3">
-                  <input placeholder="Your name" value={f.name} onChange={set("name")} {...inp} />
-                  <input placeholder="Email address" type="email" value={f.email} onChange={set("email")} {...inp} />
+                  <input placeholder="Your name" value={f.name} onChange={set("name")} autoComplete="name" {...inp} />
+                  <input placeholder="Email address" type="email" value={f.email} onChange={set("email")} autoComplete="email" {...inp} />
+                </div>
+                {/* honeypot — leave empty */}
+                <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", top: "auto", width: 1, height: 1, overflow: "hidden" }}>
+                  <label>Company<input tabIndex={-1} autoComplete="off" value={f.company} onChange={set("company")} /></label>
                 </div>
                 <input placeholder="Subject (optional)" value={f.subject} onChange={set("subject")} className={`${inp.className} mb-3`} style={inp.style} />
                 <textarea placeholder="How can we help?" rows={6} value={f.msg} onChange={set("msg")} className={`${inp.className} mb-5 resize-y`} style={inp.style} />

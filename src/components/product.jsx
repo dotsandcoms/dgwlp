@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Minus, Plus, Truck, ShieldCheck, Heart } from "lucide-react";
 import { C, HEAD, zar, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, minPriceForSize, availableSizesOf, availableMaterialsFor } from "@/lib/pricing";
+import { freeShippingLabel, DEFAULT_SETTINGS } from "@/lib/settings";
 import { Plate, Scene, RoomPreview, Dropdown, Pill } from "./primitives";
 import { useCart, useToast } from "@/context/providers";
 
@@ -21,12 +22,25 @@ export function ProductDetail({ product }) {
   const [qty, setQty] = useState(1);
   const [wish, setWish] = useState(false);
   const [zoom, setZoom] = useState(false);
+  const [shipNote, setShipNote] = useState("Free shipping on orders over R2 500");
 
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem("dg_wish") || "[]"); setWish(s.includes(product.id)); } catch {} }, [product.id]);
   useEffect(() => { if (!matsForSize.some((m) => m.id === material)) setMaterial(matsForSize[0]?.id || "paper"); }, [size]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!offersBoth) setPrintColour(product.colour === "colour" ? "colour" : "bw");
   }, [product.colour, offersBoth]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const label = freeShippingLabel(data?.shipping || DEFAULT_SETTINGS.shipping);
+        setShipNote(label || "Nationwide courier delivery");
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const mat = MATERIALS.find((m) => m.id === material) || MATERIALS[0];
   const unit = priceOfVariant(product, size, material);
@@ -127,7 +141,7 @@ export function ProductDetail({ product }) {
           <div className="mt-8 text-[13px] text-neutral-500 space-y-1">
             <div>SKU: {product.sku}</div>
             <div>Category: {product.category}</div>
-            <div className="flex items-center gap-2 pt-2 text-neutral-600"><Truck size={15} /> Free shipping on orders over R2 500</div>
+            <div className="flex items-center gap-2 pt-2 text-neutral-600"><Truck size={15} /> {shipNote}</div>
             <div className="flex items-center gap-2 text-neutral-600"><ShieldCheck size={15} /> Signed, limited-edition archival print</div>
           </div>
         </div>

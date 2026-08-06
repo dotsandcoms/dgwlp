@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { browserClient, hasSupabase } from "@/lib/supabase";
 import { checkIsAdmin } from "@/lib/admin-data";
+import { stashPendingProfile, flushPendingProfile, signupMeta, saveDeliveryProfile, fetchMyProfile } from "@/lib/auth-profile";
 
 /* ------------------------------- Toast ----------------------------- */
 const ToastCtx = createContext(null);
@@ -77,8 +78,9 @@ function AuthProvider({ children }) {
       setSessionUser(authUser || null);
       setAdminReady(false);
       if (authUser) {
-        const name = authUser.user_metadata?.full_name || authUser.email.split("@")[0].replace(/\b\w/g, (c) => c.toUpperCase());
-        persist({ name, email: authUser.email, phone: "", address: null });
+        await flushPendingProfile(authUser);
+        const profile = await fetchMyProfile(authUser);
+        persist(profile);
       } else {
         persist(null);
       }
@@ -86,7 +88,20 @@ function AuthProvider({ children }) {
       if (!cancelled) { setIsAdmin(admin); setAdminReady(true); }
     };
 
-    sb.auth.getSession().then(({ data }) => syncAdmin(data?.session?.user || null));
+    // Recover session from email-confirm hash (#access_token=…) if present
+    const boot = async () => {
+      if (typeof window !== "undefined" && window.location.hash?.includes("access_token")) {
+        const path = window.location.pathname || "/";
+        if (!path.startsWith("/auth/callback")) {
+          // Send confirm links that land on "/" to the dedicated callback handler
+          window.location.replace(`/auth/callback${window.location.hash}`);
+          return;
+        }
+      }
+      const { data } = await sb.auth.getSession();
+      await syncAdmin(data?.session?.user || null);
+    };
+    boot();
     const { data: sub } = sb.auth.onAuthStateChange((_event, session) => syncAdmin(session?.user || null));
     return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -99,29 +114,77 @@ function AuthProvider({ children }) {
   const register = async (data) => {
     if (hasSupabase) {
       const sb = browserClient();
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
       const { data: auth, error } = await sb.auth.signUp({
-        email: data.email, password: data.pass || Math.random().toString(36),
-        options: { data: { full_name: data.name } },
+        email: data.email,
+        password: data.pass || Math.random().toString(36),
+        options: {
+          // Trigger handle_new_user() reads these into profiles + addresses
+          data: signupMeta(data),
+          emailRedirectTo: origin ? `${origin}/auth/callback` : undefined,
+        },
       });
       if (error) throw error;
-      if (auth?.user) {
-        await sb.from("profiles").upsert({ id: auth.user.id, full_name: data.name, phone: data.phone });
-        if (data.address) await sb.from("addresses").insert({ user_id: auth.user.id, ...data.address, is_default: true });
+
+      // Always stash so confirm/login can repair if the trigger didn't run yet
+      stashPendingProfile(data);
+
+      if (!auth?.session) {
+        return { needsConfirmation: true };
       }
-      if (!auth?.session) throw new Error("Check your email to confirm your account, then sign in.");
-      return;
+
+      // Immediate session — also write via RPC (idempotent with the trigger)
+      if (auth?.user) {
+        await saveDeliveryProfile(auth.user, data);
+        try { localStorage.removeItem("dg_pending_profile"); } catch {}
+      }
+      return { needsConfirmation: false };
     }
     persist({ name: data.name, email: data.email, phone: data.phone, address: data.address || null });
+    return { needsConfirmation: false };
   };
 
   const login = async (data) => {
     if (hasSupabase) {
-      const { error } = await browserClient().auth.signInWithPassword({ email: data.email, password: data.pass });
+      const sb = browserClient();
+      const { data: auth, error } = await sb.auth.signInWithPassword({ email: data.email, password: data.pass });
       if (error) throw error;
-      return; // the session listener above updates `user`/`sessionUser`
+      if (auth?.user) await flushPendingProfile(auth.user);
+      return;
     }
     const name = data.name || data.email.split("@")[0].replace(/\b\w/g, (c) => c.toUpperCase());
     persist({ name, email: data.email, phone: "", address: data.address || null });
+  };
+
+  const updateProfile = async (data) => {
+    if (hasSupabase) {
+      const sb = browserClient();
+      const { data: sess } = await sb.auth.getSession();
+      const authUser = sess?.session?.user;
+      if (!authUser) throw new Error("Please sign in again.");
+      const result = await saveDeliveryProfile(authUser, data);
+      if (!result.ok) throw result.error || new Error("Could not save profile");
+      // Keep auth metadata in sync for display fallbacks
+      try {
+        await sb.auth.updateUser({
+          data: {
+            full_name: data.name || "",
+            phone: data.phone || "",
+          },
+        });
+      } catch {}
+      const profile = await fetchMyProfile(authUser);
+      persist(profile);
+      return profile;
+    }
+    const next = {
+      name: data.name,
+      email: user?.email || data.email || "",
+      phone: data.phone || "",
+      address: data.address || null,
+    };
+    persist(next);
+    return next;
   };
 
   const logout = async () => {
@@ -129,7 +192,34 @@ function AuthProvider({ children }) {
     persist(null);
   };
 
-  return <AuthCtx.Provider value={{ user, ready, register, login, logout, setUser: persist, sessionUser, isAdmin, adminReady }}>{children}</AuthCtx.Provider>;
+  return <AuthCtx.Provider value={{ user, ready, register, login, logout, updateProfile, setUser: persist, sessionUser, isAdmin, adminReady }}>{children}</AuthCtx.Provider>;
+}
+
+/* ---------------------------- Auth modal --------------------------- */
+const AuthModalCtx = createContext(null);
+export const useAuthModal = () => useContext(AuthModalCtx);
+
+function AuthModalProvider({ children }) {
+  const [state, setState] = useState({ open: false, mode: "login", next: "/account" });
+
+  const openAuth = useCallback((mode = "login", next = "/account") => {
+    const safeNext = typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : "/account";
+    setState({
+      open: true,
+      mode: mode === "register" ? "register" : "login",
+      next: safeNext,
+    });
+  }, []);
+
+  const closeAuth = useCallback(() => {
+    setState((s) => ({ ...s, open: false }));
+  }, []);
+
+  return (
+    <AuthModalCtx.Provider value={{ ...state, openAuth, closeAuth }}>
+      {children}
+    </AuthModalCtx.Provider>
+  );
 }
 
 /* ------------------------------ wrapper ---------------------------- */
@@ -137,7 +227,9 @@ export function Providers({ children }) {
   return (
     <ToastProvider>
       <AuthProvider>
-        <CartProvider>{children}</CartProvider>
+        <AuthModalProvider>
+          <CartProvider>{children}</CartProvider>
+        </AuthModalProvider>
       </AuthProvider>
     </ToastProvider>
   );

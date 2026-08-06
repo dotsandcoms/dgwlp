@@ -159,13 +159,41 @@ create table if not exists wishlists (
   primary key (user_id, product_id)
 );
 
--- Auto-create a profile row whenever a user signs up
+-- Auto-create a profile (+ address from signup metadata) whenever a user signs up
 create or replace function handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_street text := nullif(trim(coalesce(new.raw_user_meta_data->>'street', '')), '');
+  v_city   text := nullif(trim(coalesce(new.raw_user_meta_data->>'city', '')), '');
+  v_postal text := nullif(trim(coalesce(new.raw_user_meta_data->>'postal', '')), '');
+  v_phone  text := nullif(trim(coalesce(new.raw_user_meta_data->>'phone', '')), '');
 begin
-  insert into public.profiles (id, full_name)
-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', ''))
-  on conflict (id) do nothing;
+  insert into public.profiles (id, full_name, phone)
+  values (
+    new.id,
+    coalesce(nullif(trim(coalesce(new.raw_user_meta_data->>'full_name', '')), ''), ''),
+    v_phone
+  )
+  on conflict (id) do update set
+    full_name = coalesce(nullif(excluded.full_name, ''), profiles.full_name),
+    phone = coalesce(excluded.phone, profiles.phone),
+    updated_at = now();
+
+  if v_street is not null and v_city is not null and v_postal is not null then
+    insert into public.addresses (
+      user_id, street, suburb, city, province, postal_code, notes, is_default
+    ) values (
+      new.id,
+      v_street,
+      nullif(trim(coalesce(new.raw_user_meta_data->>'suburb', '')), ''),
+      v_city,
+      coalesce(nullif(trim(coalesce(new.raw_user_meta_data->>'province', '')), ''), 'Gauteng'),
+      v_postal,
+      nullif(trim(coalesce(new.raw_user_meta_data->>'notes', '')), ''),
+      true
+    );
+  end if;
+
   return new;
 end;
 $$;
@@ -438,6 +466,8 @@ create policy "variants_admin" on product_variants for all using (is_admin()) wi
 -- Profiles: each user manages their own
 drop policy if exists "profiles_self" on profiles;
 create policy "profiles_self" on profiles for select using (auth.uid() = id or is_admin());
+drop policy if exists "profiles_self_ins" on profiles;
+create policy "profiles_self_ins" on profiles for insert with check (auth.uid() = id);
 drop policy if exists "profiles_self_upd" on profiles;
 create policy "profiles_self_upd" on profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 
@@ -473,6 +503,32 @@ create policy "items_insert" on order_items for insert
 -- Admins table: readable by admins only
 drop policy if exists "admins_read" on admins;
 create policy "admins_read" on admins for select using (is_admin());
+
+-- =====================================================================
+-- Site settings (shipping, tax, PayFast) — see also site_settings.sql
+-- =====================================================================
+create table if not exists site_settings (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz default now()
+);
+alter table site_settings enable row level security;
+drop policy if exists "settings_read" on site_settings;
+create policy "settings_read" on site_settings for select using (
+  key in ('shipping', 'tax') or public.is_admin()
+);
+drop policy if exists "settings_admin_insert" on site_settings;
+create policy "settings_admin_insert" on site_settings for insert with check (public.is_admin());
+drop policy if exists "settings_admin_update" on site_settings;
+create policy "settings_admin_update" on site_settings for update using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "settings_admin_delete" on site_settings;
+create policy "settings_admin_delete" on site_settings for delete using (public.is_admin());
+
+insert into site_settings (key, value) values
+  ('shipping', '{"standardPrice":150,"expressPrice":300,"freeOver":2500,"allFree":false}'::jsonb),
+  ('tax', '{"enabled":false,"ratePct":15,"label":"VAT"}'::jsonb),
+  ('payfast', '{"merchantId":"","merchantKey":"","passphrase":"","sandbox":true}'::jsonb)
+on conflict (key) do nothing;
 
 -- =====================================================================
 -- 10.  MAKE YOURSELF AN ADMIN

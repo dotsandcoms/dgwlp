@@ -1,18 +1,19 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Check, CreditCard, Truck, ShieldCheck, ShoppingBag, ChevronDown, Mail } from "lucide-react";
-import { C, HEAD, zar, PROVINCES } from "@/lib/pricing";
+import { Check, CreditCard, Truck, ShieldCheck, ShoppingBag, Mail } from "lucide-react";
+import { C, HEAD, zar } from "@/lib/pricing";
 import { Plate, Pill, Row } from "./primitives";
 import { RegisterForm, LoginForm } from "./forms";
+import { AddressFields } from "./address-fields";
+import { emptyAddress } from "@/lib/address";
+import { DEFAULT_SETTINGS, orderTotals, shippingCost } from "@/lib/settings";
 import { useCart, useAuth, useToast } from "@/context/providers";
 import { friendlyError } from "@/lib/errors";
 
-const inp = { className: "w-full py-3 px-3 text-[14px] outline-none", style: { border: `1px solid ${C.line}`, borderRadius: 4 } };
-
 export function CheckoutFlow() {
   const cart = useCart();
-  const { user, register, login, setUser } = useAuth();
+  const { user, register, login, updateProfile } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -21,21 +22,71 @@ export function CheckoutFlow() {
   const [ship, setShip] = useState("standard");
   const [pay, setPay] = useState("payfast");
   const [addr, setAddr] = useState(null);
+  const [storeSettings, setStoreSettings] = useState({
+    shipping: DEFAULT_SETTINGS.shipping,
+    tax: DEFAULT_SETTINGS.tax,
+  });
 
   useEffect(() => { if (user) { setStep((s) => (s === 1 ? 2 : s)); setAddr(user.address || null); } }, [user]);
 
-  const shipCost = ship === "express" ? 300 : (cart.subtotal >= 2500 ? 0 : 150);
-  const total = cart.subtotal + shipCost;
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled || !data) return;
+        setStoreSettings({
+          shipping: { ...DEFAULT_SETTINGS.shipping, ...(data.shipping || {}) },
+          tax: { ...DEFAULT_SETTINGS.tax, ...(data.tax || {}) },
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const totals = useMemo(
+    () => orderTotals(storeSettings, { subtotal: cart.subtotal, method: ship }),
+    [storeSettings, cart.subtotal, ship]
+  );
+  const { shipping: shipCost, tax: taxCost, total, taxLabel, taxEnabled } = totals;
   const steps = ["Account", "Delivery", "Payment"];
+
+  /** Persist delivery (including notes) to the signed-in profile. */
+  const saveDeliveryToProfile = async (delivery) => {
+    if (!user || !delivery?.street) return;
+    try {
+      await updateProfile({
+        name: user.name,
+        phone: user.phone || "",
+        address: {
+          street: (delivery.street || "").trim(),
+          suburb: (delivery.suburb || "").trim(),
+          city: (delivery.city || "").trim(),
+          province: delivery.province || "",
+          postal: (delivery.postal || "").trim(),
+          notes: (delivery.notes || "").trim(),
+        },
+      });
+    } catch {
+      // Checkout can continue even if profile sync fails
+    }
+  };
 
   const place = async () => {
     const order = {
       id: "DG-" + Math.floor(1000 + Math.random() * 9000),
-      items: cart.items, subtotal: cart.subtotal, shipping: shipCost, total,
-      delivery: addr, pay, email: user?.email,
+      items: cart.items,
+      subtotal: cart.subtotal,
+      shipping: shipCost,
+      tax: taxCost,
+      taxLabel,
+      total,
+      delivery: addr,
+      pay,
+      email: user?.email,
     };
+    await saveDeliveryToProfile(addr);
     try { localStorage.setItem("dg_last_order", JSON.stringify(order)); } catch {}
-    // Fire the receipt email (no-op unless RESEND_API_KEY is set)
     try { await fetch("/api/email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "receipt", order }) }); } catch {}
     cart.clear();
     toast("Order placed — thank you!");
@@ -78,12 +129,40 @@ export function CheckoutFlow() {
                 ))}
               </div>
               {authTab === "register"
-                ? <RegisterForm compact onDone={async (d) => { try { await register(d); setAddr(d.address); setStep(2); toast("Account created"); } catch (e) { toast(friendlyError(e, "Could not create account")); } }} />
+                ? <RegisterForm compact onDone={async (d) => {
+                    try {
+                      const result = await register(d);
+                      if (result?.needsConfirmation) {
+                        toast("Check your email to confirm your account, then sign in.");
+                        return;
+                      }
+                      setAddr(d.address);
+                      setStep(2);
+                      toast("Account created");
+                    } catch (e) {
+                      toast(friendlyError(e, "Could not create account"));
+                    }
+                  }} />
                 : <LoginForm onDone={async (d) => { try { await login(d); setStep(2); toast("Welcome back"); } catch (e) { toast(friendlyError(e, "Sign in failed")); } }} />}
             </div>
           )}
 
-          {step === 2 && <DeliveryStep addr={addr || user?.address} setAddr={setAddr} ship={ship} setShip={setShip} subtotal={cart.subtotal} onBack={() => setStep(user ? 2 : 1)} onNext={() => setStep(3)} />}
+          {step === 2 && (
+            <DeliveryStep
+              addr={addr || user?.address}
+              setAddr={setAddr}
+              ship={ship}
+              setShip={setShip}
+              subtotal={cart.subtotal}
+              shippingCfg={storeSettings.shipping}
+              onBack={() => setStep(user ? 2 : 1)}
+              onNext={async (delivery) => {
+                setAddr(delivery);
+                await saveDeliveryToProfile(delivery);
+                setStep(3);
+              }}
+            />
+          )}
 
           {step === 3 && (
             <div>
@@ -99,6 +178,7 @@ export function CheckoutFlow() {
                 <div className="mt-6 p-4 rounded" style={{ background: "#faf9f6", border: `1px solid ${C.line}` }}>
                   <div className="text-[12px] tracking-[.08em] text-neutral-500 mb-1" style={{ fontFamily: HEAD }}>DELIVERING TO</div>
                   <div className="text-[13px] text-neutral-700">{addr.street}, {addr.suburb ? addr.suburb + ", " : ""}{addr.city}, {addr.province}, {addr.postal}</div>
+                  {addr.notes && <div className="text-[12px] text-neutral-500 mt-1">{addr.notes}</div>}
                   <button onClick={() => setStep(2)} className="text-[12px] mt-1" style={{ color: C.green }}>Edit</button>
                 </div>
               )}
@@ -123,6 +203,7 @@ export function CheckoutFlow() {
           <div className="my-3" style={{ borderTop: "1px solid #d6dcc9" }} />
           <Row l="Subtotal" v={zar(cart.subtotal)} />
           <Row l="Shipping" v={step >= 2 ? (shipCost === 0 ? "Free" : zar(shipCost)) : "—"} />
+          {taxEnabled && step >= 2 && <Row l={`${taxLabel} (${storeSettings.tax.ratePct}%)`} v={zar(taxCost)} />}
           <div className="my-2" style={{ borderTop: "1px solid #d6dcc9" }} />
           <Row l="Total" v={zar(step >= 2 ? total : cart.subtotal)} bold />
         </div>
@@ -131,27 +212,25 @@ export function CheckoutFlow() {
   );
 }
 
-function DeliveryStep({ addr, setAddr, ship, setShip, subtotal, onBack, onNext }) {
-  const [f, setF] = useState(addr || { street: "", suburb: "", city: "", province: PROVINCES[0], postal: "", notes: "" });
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+function DeliveryStep({ addr, setAddr, ship, setShip, subtotal, shippingCfg, onBack, onNext }) {
+  const [f, setF] = useState(() => ({ ...emptyAddress(), ...(addr || {}) }));
   const ready = f.street && f.city && f.postal;
+  const standardCost = shippingCost(shippingCfg, "standard", subtotal);
+  const expressCost = shippingCost(shippingCfg, "express", subtotal);
   return (
     <div>
       <h3 className="text-[14px] tracking-[.1em] mb-4" style={{ fontFamily: HEAD }}>DELIVERY DETAILS</h3>
-      <input placeholder="Street address" value={f.street} onChange={set("street")} {...inp} />
-      <div className="grid sm:grid-cols-2 gap-3 my-3">
-        <input placeholder="Suburb" value={f.suburb} onChange={set("suburb")} {...inp} />
-        <input placeholder="City" value={f.city} onChange={set("city")} {...inp} />
-        <div className="relative">
-          <select value={f.province} onChange={set("province")} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{PROVINCES.map((p) => <option key={p}>{p}</option>)}</select>
-          <ChevronDown size={15} className="absolute right-3 top-3.5 pointer-events-none" />
-        </div>
-        <input placeholder="Postal code" value={f.postal} onChange={set("postal")} {...inp} />
-      </div>
-      <input placeholder="Delivery notes (optional)" value={f.notes} onChange={set("notes")} {...inp} />
+      <AddressFields
+        value={f}
+        onChange={setF}
+        notesPlaceholder="Delivery notes (optional)"
+      />
 
       <h3 className="text-[14px] tracking-[.1em] mt-8 mb-3" style={{ fontFamily: HEAD }}>SHIPPING METHOD</h3>
-      {[["standard", "Standard courier", "2–4 working days", subtotal >= 2500 ? 0 : 150], ["express", "Express courier", "1–2 working days", 300]].map(([id, n, d, cost]) => (
+      {[
+        ["standard", "Standard courier", "2–4 working days", standardCost],
+        ["express", "Express courier", "1–2 working days", expressCost],
+      ].map(([id, n, d, cost]) => (
         <label key={id} className="flex items-center justify-between p-3 mb-2 cursor-pointer" style={{ border: `1px solid ${ship === id ? C.green : C.line}`, borderRadius: 4 }}>
           <div className="flex items-center gap-3"><input type="radio" checked={ship === id} onChange={() => setShip(id)} /><Truck size={17} color={C.green} /><div><div className="text-[14px]" style={{ fontFamily: HEAD }}>{n}</div><div className="text-[12px] text-neutral-500">{d}</div></div></div>
           <span className="text-[14px]" style={{ fontFamily: HEAD }}>{cost === 0 ? "Free" : zar(cost)}</span>
@@ -159,7 +238,7 @@ function DeliveryStep({ addr, setAddr, ship, setShip, subtotal, onBack, onNext }
       ))}
       <div className="flex items-center justify-between mt-6">
         <button onClick={onBack} className="text-[13px] text-neutral-500">← Account</button>
-        <Pill onClick={() => { if (ready) { setAddr(f); onNext(); } }} style={{ opacity: ready ? 1 : .5, pointerEvents: ready ? "auto" : "none" }}>Continue to payment →</Pill>
+        <Pill onClick={() => { if (ready) { setAddr(f); onNext(f); } }} style={{ opacity: ready ? 1 : .5, pointerEvents: ready ? "auto" : "none" }}>Continue to payment →</Pill>
       </div>
     </div>
   );
@@ -191,8 +270,11 @@ export function Confirmation() {
             </div>
           ))}
           <div className="flex justify-between text-[13px] py-1.5"><span className="text-neutral-500">Shipping</span><span>{order.shipping === 0 ? "Free" : zar(order.shipping)}</span></div>
+          {order.tax > 0 && (
+            <div className="flex justify-between text-[13px] py-1.5"><span className="text-neutral-500">{order.taxLabel || "VAT"}</span><span>{zar(order.tax)}</span></div>
+          )}
           <div className="flex justify-between text-[14px] pt-2" style={{ fontFamily: HEAD, fontWeight: 600 }}><span>Total paid</span><span>{zar(order.total)}</span></div>
-          <p className="text-[12px] text-neutral-500 mt-4">We'll send a separate shipping confirmation with tracking once your print is on its way. 🐆</p>
+          <p className="text-[12px] text-neutral-500 mt-4">We'll send a separate shipping confirmation with tracking once your print is on its way.</p>
         </div>
       </div>
       <div className="mt-8"><Pill variant="outline" onClick={() => router.push("/shop")}>Continue shopping</Pill></div>

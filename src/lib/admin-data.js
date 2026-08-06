@@ -3,6 +3,7 @@
 // these are convenience wrappers, not a security layer of their own.
 "use client";
 import { browserClient } from "./supabase";
+import { DEFAULT_SETTINGS, mergeSettings } from "./settings";
 
 export const slugify = (s) =>
   (s || "").toString().trim().toLowerCase()
@@ -134,4 +135,71 @@ export async function updateOrderStatus(id, status) {
   const sb = browserClient();
   const { error } = await sb.from("orders").update({ status }).eq("id", id);
   if (error) throw error;
+}
+
+/* ------------------------------- settings ----------------------------- */
+const SETTINGS_KEYS = ["shipping", "tax", "payfast"];
+
+export async function fetchSettings() {
+  const sb = browserClient();
+  if (!sb) {
+    try {
+      const raw = localStorage.getItem("dg_site_settings");
+      if (raw) return mergeSettings(JSON.parse(raw));
+    } catch {}
+    return mergeSettings();
+  }
+  const { data, error } = await sb.from("site_settings").select("key,value").in("key", SETTINGS_KEYS);
+  if (error) throw error;
+  const partial = {};
+  for (const row of data || []) partial[row.key] = row.value;
+  return mergeSettings(partial);
+}
+
+/**
+ * Save settings. For payfast secrets, empty merchantKey / passphrase keeps the existing value.
+ */
+export async function saveSettings(next, { previous } = {}) {
+  const merged = mergeSettings(next);
+  const prev = mergeSettings(previous);
+
+  // Don't wipe secrets if the admin left the fields blank
+  if (!merged.payfast.merchantKey) merged.payfast.merchantKey = prev.payfast.merchantKey || "";
+  if (!merged.payfast.passphrase) merged.payfast.passphrase = prev.payfast.passphrase || "";
+
+  const sb = browserClient();
+  if (!sb) {
+    try { localStorage.setItem("dg_site_settings", JSON.stringify(merged)); } catch {}
+    return merged;
+  }
+
+  const rows = SETTINGS_KEYS.map((key) => ({
+    key,
+    value: merged[key],
+    updated_at: new Date().toISOString(),
+  }));
+  const { error } = await sb.from("site_settings").upsert(rows, { onConflict: "key" });
+  if (error) throw error;
+  return merged;
+}
+
+/** Public shipping + tax only (uses anon RLS). */
+export async function fetchPublicSettings() {
+  const sb = browserClient();
+  if (!sb) {
+    try {
+      const raw = localStorage.getItem("dg_site_settings");
+      if (raw) {
+        const m = mergeSettings(JSON.parse(raw));
+        return { shipping: m.shipping, tax: m.tax };
+      }
+    } catch {}
+    return { shipping: DEFAULT_SETTINGS.shipping, tax: DEFAULT_SETTINGS.tax };
+  }
+  const { data, error } = await sb.from("site_settings").select("key,value").in("key", ["shipping", "tax"]);
+  if (error) throw error;
+  const partial = {};
+  for (const row of data || []) partial[row.key] = row.value;
+  const m = mergeSettings(partial);
+  return { shipping: m.shipping, tax: m.tax };
 }

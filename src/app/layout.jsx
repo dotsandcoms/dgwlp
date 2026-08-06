@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Providers } from "@/context/providers";
 import { Header, Footer, CartDrawer, Toaster } from "@/components/chrome";
+import { AuthModal } from "@/components/auth-modal";
 
 export const metadata = {
   title: "Doron Goldstein Photography — Limited Edition Wildlife Prints",
@@ -20,6 +21,7 @@ export default function RootLayout({ children }) {
           <main>{children}</main>
           <Footer />
           <CartDrawer />
+          <AuthModal />
           <Toaster />
         </Providers>
       </body>

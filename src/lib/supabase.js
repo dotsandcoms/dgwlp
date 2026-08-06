@@ -23,7 +23,14 @@ let _browser = null;
 export function browserClient() {
   if (!hasSupabase) return null;
   if (_browser) return _browser;
-  _browser = createClient(url, anon, { auth: { persistSession: true, autoRefreshToken: true } });
+  _browser = createClient(url, anon, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: "implicit",
+    },
+  });
   return _browser;
 }
 

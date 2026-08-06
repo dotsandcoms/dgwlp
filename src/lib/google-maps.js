@@ -5,7 +5,12 @@ const CALLBACK = "__dgMapsReady";
 let loading = null;
 
 export function mapsKey() {
-  return process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+  return (
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
+    process.env.NEXT_GOOGLE_MAPS_API_KEY ||
+    process.env.GOOGLE_MAPS_API_KEY ||
+    ""
+  );
 }
 
 export function loadGoogleMaps() {

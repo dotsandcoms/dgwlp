@@ -1,7 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+/**
+ * Next.js only inlines env vars that start with NEXT_PUBLIC_ into the
+ * browser bundle. Prefer those names on Vercel.
+ * Server-only aliases (SUPABASE_URL / SUPABASE_ANON_KEY) are accepted as a
+ * fallback so SSR catalogue reads still work if PUBLIC_ was stripped by mistake.
+ */
+const url =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  "";
+const anon =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.NEXT_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  "";
 
 export const hasSupabase = Boolean(url && anon);
 
@@ -46,7 +60,9 @@ export function imageUrl(path) {
 // Serves from Supabase Storage when NEXT_PUBLIC_STORAGE_SITE_IMAGES=true,
 // otherwise from the bundled /public/images files (works out of the box).
 export function siteImage(file) {
-  const fromStorage = process.env.NEXT_PUBLIC_STORAGE_SITE_IMAGES === "true";
+  const fromStorage =
+    process.env.NEXT_PUBLIC_STORAGE_SITE_IMAGES === "true" ||
+    process.env.STORAGE_SITE_IMAGES === "true";
   if (fromStorage && url) return `${url}/storage/v1/object/public/images/${file}`;
   return `/images/${file}`;
 }

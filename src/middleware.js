@@ -8,7 +8,11 @@ import { NextResponse } from "next/server";
  */
 export function middleware(req) {
   const { pathname } = req.nextUrl;
-  const configured = (process.env.NEXT_PUBLIC_ADMIN_PATH || "/admin").replace(/\/$/, "") || "/admin";
+  const configured = (
+    process.env.NEXT_PUBLIC_ADMIN_PATH ||
+    process.env.NEXT_ADMIN_PATH ||
+    "/admin"
+  ).replace(/\/$/, "") || "/admin";
   const customAdmin = configured !== "/admin";
   const slug = configured.replace(/^\//, "");
 

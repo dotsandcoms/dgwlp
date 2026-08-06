@@ -260,7 +260,7 @@ export function Footer() {
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   return (
-    <footer style={{ background: C.dark, color: "#cfcfcb" }} className="mt-24">
+    <footer style={{ background: C.dark, color: "#cfcfcb" }}>
       <div className="max-w-[1240px] mx-auto px-5 py-14 grid gap-10 md:grid-cols-4">
         <div className="md:col-span-2">
           <div style={{ fontFamily: HEAD }} className="tracking-[.12em] text-white text-[16px] mb-3">DORON GOLDSTEIN <span style={{ color: C.green }}>PHOTOGRAPHY</span></div>

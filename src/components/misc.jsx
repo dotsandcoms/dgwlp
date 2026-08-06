@@ -135,19 +135,32 @@ export function About() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="max-w-[720px] mx-auto px-5 py-20 sm:py-24 text-center">
-        <Reveal>
-          <h2 className="text-[28px] sm:text-[36px] mb-4" style={{ fontFamily: HEAD, fontWeight: 300 }}>Bring the wild home</h2>
-        </Reveal>
-        <Reveal delay={80}>
-          <p className="text-[15px] text-neutral-600 mb-8 max-w-md mx-auto">
-            Signed, limited-edition archival prints from the Kruger, Kgalagadi and beyond.
-          </p>
-        </Reveal>
-        <Reveal delay={140}>
-          <Link href="/shop"><Pill>Explore the collection →</Pill></Link>
-        </Reveal>
+      {/* CTA — parallax backdrop */}
+      <section className="relative overflow-hidden" style={{ minHeight: 420 }}>
+        <Parallax speed={0.28} className="absolute inset-0" style={{ top: "-18%", height: "136%" }}>
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `url(${siteImage("about2.jpg")})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }}
+          />
+        </Parallax>
+        <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,rgba(20,20,18,.55),rgba(20,20,18,.72))" }} />
+        <div className="relative max-w-[720px] mx-auto px-5 py-24 sm:py-32 text-center text-white">
+          <Reveal>
+            <h2 className="text-[28px] sm:text-[36px] mb-4" style={{ fontFamily: HEAD, fontWeight: 300 }}>Bring the wild home</h2>
+          </Reveal>
+          <Reveal delay={80}>
+            <p className="text-[15px] text-white/80 mb-8 max-w-md mx-auto">
+              Signed, limited-edition archival prints from the Kruger, Kgalagadi and beyond.
+            </p>
+          </Reveal>
+          <Reveal delay={140}>
+            <Link href="/shop"><Pill>Explore the collection →</Pill></Link>
+          </Reveal>
+        </div>
       </section>
     </div>
   );
@@ -155,17 +168,165 @@ export function About() {
 
 export function Contact() {
   const { toast } = useToast();
-  const [f, setF] = useState({ name: "", email: "", msg: "" });
+  const [f, setF] = useState({ name: "", email: "", subject: "", msg: "" });
+  const [sending, setSending] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const inp = { className: "w-full py-3 px-3 text-[14px] outline-none mb-3", style: { border: `1px solid ${C.line}`, borderRadius: 4 } };
+  const inp = {
+    className: "w-full py-3.5 px-4 text-[14px] outline-none bg-white/95",
+    style: { border: `1px solid ${C.line}`, borderRadius: 4 },
+  };
+
+  const submit = () => {
+    if (!f.name.trim() || !f.email.trim() || !f.msg.trim()) {
+      toast("Please fill in your name, email and message");
+      return;
+    }
+    setSending(true);
+    setTimeout(() => {
+      setF({ name: "", email: "", subject: "", msg: "" });
+      setSending(false);
+      toast("Message sent — Doron will be in touch");
+    }, 450);
+  };
+
   return (
-    <div className="max-w-[620px] mx-auto px-5 py-14">
-      <h1 className="text-[38px] mb-2" style={{ fontFamily: HEAD, fontWeight: 300 }}>CONTACT</h1>
-      <p className="text-neutral-600 text-[14px] mb-8">Commission a print, ask about custom sizes, or just say hello.</p>
-      <input placeholder="Your name" value={f.name} onChange={set("name")} {...inp} />
-      <input placeholder="Email address" value={f.email} onChange={set("email")} {...inp} />
-      <textarea placeholder="Message" rows={5} value={f.msg} onChange={set("msg")} {...inp} />
-      <Pill onClick={() => { setF({ name: "", email: "", msg: "" }); toast("Message sent — Doron will be in touch"); }} style={{ width: "100%" }}>Send message</Pill>
+    <div>
+      {/* Hero */}
+      <section className="relative overflow-hidden" style={{ background: C.dark, minHeight: "62vh" }}>
+        <div className="absolute inset-0">
+          <Parallax speed={0.22} className="absolute inset-0" style={{ top: "-12%", height: "124%" }}>
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `url(${siteImage("contact1.jpg")})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                filter: "grayscale(1) contrast(1.05)",
+              }}
+            />
+          </Parallax>
+          <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,rgba(20,20,18,.45) 0%,rgba(20,20,18,.78) 100%)" }} />
+        </div>
+
+        <div className="relative max-w-[1240px] mx-auto px-5 py-24 sm:py-32 flex flex-col justify-end min-h-[62vh]">
+          <Reveal>
+            <p className="tracking-[.28em] text-[12px] sm:text-[13px] mb-4" style={{ fontFamily: HEAD, color: C.green }}>SAY HELLO</p>
+          </Reveal>
+          <Reveal delay={100}>
+            <h1 className="text-white text-[44px] sm:text-[68px] leading-[0.92] font-light" style={{ fontFamily: HEAD, letterSpacing: ".02em" }}>
+              CONTACT
+            </h1>
+          </Reveal>
+          <Reveal delay={200}>
+            <p className="mt-6 text-[16px] sm:text-[18px] leading-relaxed text-white/80 max-w-lg" style={{ fontFamily: HEAD, fontWeight: 300 }}>
+              Commission a print, ask about custom sizes, or simply share what drew you to a frame.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Intro + form */}
+      <section className="relative" style={{ background: `linear-gradient(180deg, #f7f5f0 0%, #fff 40%)` }}>
+        <div className="max-w-[1100px] mx-auto px-5 py-16 sm:py-24 grid lg:grid-cols-12 gap-12 lg:gap-16">
+          <div className="lg:col-span-5">
+            <Reveal>
+              <p className="text-[12px] tracking-[.22em] mb-3" style={{ fontFamily: HEAD, color: C.green }}>GET IN TOUCH</p>
+            </Reveal>
+            <Reveal delay={80}>
+              <h2 className="text-[28px] sm:text-[36px] leading-tight mb-6" style={{ fontFamily: HEAD, fontWeight: 300 }}>
+                Let’s talk about the wild.
+              </h2>
+            </Reveal>
+            <Reveal delay={140}>
+              <p className="text-[15px] leading-relaxed text-neutral-600 mb-10">
+                Whether you’re choosing a first print for your home or looking for a larger commission, Doron and the team are happy to help with sizing, finishes and framing.
+              </p>
+            </Reveal>
+
+            <Reveal delay={200}>
+              <div className="space-y-6">
+                {[
+                  { label: "Email", value: "orders@dotsandcoms.co.za", href: "mailto:orders@dotsandcoms.co.za" },
+                  { label: "Studio", value: "Johannesburg, South Africa" },
+                  { label: "Orders", value: "Archival paper & canvas · shipped nationwide" },
+                ].map((item) => (
+                  <div key={item.label} style={{ borderBottom: `1px solid ${C.line}` }} className="pb-5">
+                    <div className="text-[11px] tracking-[.18em] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>{item.label.toUpperCase()}</div>
+                    {item.href ? (
+                      <a href={item.href} className="text-[16px] hover:opacity-70" style={{ fontFamily: HEAD, color: C.ink }}>{item.value}</a>
+                    ) : (
+                      <div className="text-[16px]" style={{ fontFamily: HEAD }}>{item.value}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+
+            <Reveal delay={280}>
+              <div className="mt-10 p-5" style={{ background: C.greenSoft, borderRadius: 6 }}>
+                <p className="text-[13px] leading-relaxed text-neutral-700">
+                  Looking for something specific? Browse the{" "}
+                  <Link href="/shop" style={{ color: C.green, fontFamily: HEAD }}>collection</Link>
+                  {" "}or read more{" "}
+                  <Link href="/about" style={{ color: C.green, fontFamily: HEAD }}>about Doron</Link>.
+                </p>
+              </div>
+            </Reveal>
+          </div>
+
+          <div className="lg:col-span-7">
+            <Reveal delay={120}>
+              <div className="p-6 sm:p-8 bg-white" style={{ border: `1px solid ${C.line}`, borderRadius: 8, boxShadow: "0 18px 50px rgba(20,20,18,.06)" }}>
+                <h3 className="text-[18px] mb-1" style={{ fontFamily: HEAD }}>Send a message</h3>
+                <p className="text-[13px] text-neutral-500 mb-6">We’ll get back to you as soon as we can.</p>
+
+                <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                  <input placeholder="Your name" value={f.name} onChange={set("name")} {...inp} />
+                  <input placeholder="Email address" type="email" value={f.email} onChange={set("email")} {...inp} />
+                </div>
+                <input placeholder="Subject (optional)" value={f.subject} onChange={set("subject")} className={`${inp.className} mb-3`} style={inp.style} />
+                <textarea placeholder="How can we help?" rows={6} value={f.msg} onChange={set("msg")} className={`${inp.className} mb-5 resize-y`} style={inp.style} />
+                <Pill onClick={submit} disabled={sending} style={{ width: "100%" }}>
+                  {sending ? "Sending…" : "Send message"}
+                </Pill>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
+      {/* Closing band */}
+      <section className="relative overflow-hidden" style={{ minHeight: 320 }}>
+        <Parallax speed={0.26} className="absolute inset-0" style={{ top: "-16%", height: "132%" }}>
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `url(${siteImage("contact2.jpg")})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              filter: "grayscale(1) contrast(1.04)",
+            }}
+          />
+        </Parallax>
+        <div className="absolute inset-0" style={{ background: "rgba(20,20,18,.68)" }} />
+        <div className="relative max-w-[720px] mx-auto px-5 py-20 sm:py-24 text-center text-white">
+          <Reveal>
+            <p className="text-[12px] tracking-[.28em] mb-4" style={{ fontFamily: HEAD, color: C.green }}>THE COLLECTION</p>
+          </Reveal>
+          <Reveal delay={80}>
+            <h2 className="text-[28px] sm:text-[36px] mb-4 font-light" style={{ fontFamily: HEAD }}>Prefer to browse first?</h2>
+          </Reveal>
+          <Reveal delay={140}>
+            <p className="text-[15px] text-white/75 mb-8 max-w-md mx-auto">
+              Explore signed, limited-edition prints from the Kruger, Kgalagadi and beyond.
+            </p>
+          </Reveal>
+          <Reveal delay={200}>
+            <Link href="/shop"><Pill>View the collection →</Pill></Link>
+          </Reveal>
+        </div>
+      </section>
     </div>
   );
 }
+

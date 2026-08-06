@@ -30,8 +30,23 @@ function LiveAdminGate() {
   const router = useRouter();
   const { sessionUser, isAdmin, adminReady } = useAuth();
   const { openAuth } = useAuthModal();
+  const [localAdmin, setLocalAdmin] = useState(null); // null = checking
 
-  if (!adminReady) {
+  // Re-verify on this page — don't rely only on the header context flag
+  useEffect(() => {
+    let cancelled = false;
+    if (!sessionUser) {
+      setLocalAdmin(false);
+      return undefined;
+    }
+    setLocalAdmin(null);
+    db.checkIsAdmin()
+      .then((ok) => { if (!cancelled) setLocalAdmin(ok); })
+      .catch(() => { if (!cancelled) setLocalAdmin(false); });
+    return () => { cancelled = true; };
+  }, [sessionUser]);
+
+  if (!adminReady || (sessionUser && localAdmin === null)) {
     return <div className="max-w-[1240px] mx-auto px-5 py-24 text-center text-neutral-500 text-[14px] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Checking access…</div>;
   }
   if (!sessionUser) {
@@ -44,12 +59,14 @@ function LiveAdminGate() {
       </div>
     );
   }
-  if (!isAdmin) {
+  const allowed = localAdmin === true || isAdmin === true;
+  if (!allowed) {
     return (
       <div className="max-w-[560px] mx-auto px-5 py-24 text-center">
         <Lock size={26} color={C.gray} className="mx-auto mb-4" />
         <h1 className="text-[22px] mb-2" style={{ fontFamily: HEAD }}>Not authorized</h1>
         <p className="text-[14px] text-neutral-600 mb-4">This account does not have access to the store console.</p>
+        <p className="text-[12px] text-neutral-400 mb-6">Signed in as {sessionUser.email}. Run <code style={{ fontFamily: "monospace" }}>fix_admin_access.sql</code> in Supabase if this is wrong.</p>
         <Pill onClick={() => router.push("/")}>Back to site</Pill>
       </div>
     );

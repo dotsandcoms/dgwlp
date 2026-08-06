@@ -12,9 +12,9 @@ export function middleware(req) {
     process.env.NEXT_PUBLIC_ADMIN_PATH ||
     process.env.NEXT_ADMIN_PATH ||
     "/admin"
-  ).replace(/\/$/, "") || "/admin";
+  ).trim().replace(/\/$/, "") || "/admin";
   const customAdmin = configured !== "/admin";
-  const slug = configured.replace(/^\//, "");
+  const slug = configured.replace(/^\//, "").trim();
 
   if (customAdmin) {
     // Hit the real not-found UI (not a plain-text 404)

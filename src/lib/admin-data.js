@@ -14,22 +14,24 @@ export async function checkIsAdmin() {
   const sb = browserClient();
   if (!sb) return false;
 
-  const { data: sess } = await sb.auth.getSession();
-  const uid = sess?.session?.user?.id;
-  if (!uid) return false;
+  // Validate the JWT with the server (avoids stale local sessions)
+  const { data: userData, error: userErr } = await sb.auth.getUser();
+  const uid = userData?.user?.id;
+  if (userErr || !uid) return false;
 
-  // Prefer RPC (security definer) — works even with stricter RLS.
   const { data: rpcData, error: rpcErr } = await sb.rpc("is_admin");
-  if (!rpcErr) return Boolean(rpcData);
+  if (!rpcErr && (rpcData === true || rpcData === "true")) return true;
 
-  // Fallback: own row on admins (requires admins_read allowing user_id = auth.uid())
+  // Always try a direct row read too — don't trust a bare `false` from RPC
+  // when auth.uid() failed to resolve inside the function.
   const { data: row, error: rowErr } = await sb
     .from("admins")
     .select("user_id")
     .eq("user_id", uid)
     .maybeSingle();
-  if (rowErr) return false;
-  return Boolean(row?.user_id);
+  if (!rowErr && row?.user_id) return true;
+
+  return false;
 }
 
 /* ------------------------------ categories --------------------------- */

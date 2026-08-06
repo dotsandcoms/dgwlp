@@ -27,27 +27,115 @@ export function signupMeta(data) {
   };
 }
 
-/**
- * Persist phone + address via secure RPC (bypasses brittle client RLS upserts).
- */
+async function requireUser(sb) {
+  const { data, error } = await sb.auth.getUser();
+  if (error || !data?.user?.id) throw new Error("Please sign in again.");
+  return data.user;
+}
+
+/** Write profile + address with RPC, then verify via direct table writes if needed. */
 export async function saveDeliveryProfile(authUser, data) {
-  if (!authUser?.id) return { ok: false, error: "No user" };
   const sb = browserClient();
   if (!sb) return { ok: false, error: "No client" };
 
+  let user = authUser;
+  try {
+    user = await requireUser(sb);
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+
   const a = data?.address || {};
-  const { error } = await sb.rpc("save_my_delivery", {
-    p_full_name: data?.name || authUser.user_metadata?.full_name || null,
-    p_phone: data?.phone != null ? String(data.phone) : null,
-    p_street: a.street || null,
-    p_suburb: a.suburb || null,
-    p_city: a.city || null,
-    p_province: a.province || null,
-    p_postal: a.postal || a.postal_code || null,
-    p_notes: a.notes != null ? String(a.notes) : null,
+  const payload = {
+    name: (data?.name || "").trim(),
+    phone: data?.phone != null ? String(data.phone).trim() : "",
+    street: (a.street || "").trim(),
+    suburb: (a.suburb || "").trim(),
+    city: (a.city || "").trim(),
+    province: a.province || "",
+    postal: (a.postal || a.postal_code || "").trim(),
+    notes: a.notes != null ? String(a.notes).trim() : "",
+  };
+
+  // 1) RPC (security definer)
+  const { error: rpcErr } = await sb.rpc("save_my_delivery", {
+    p_full_name: payload.name || null,
+    p_phone: payload.phone,
+    p_street: payload.street || null,
+    p_suburb: payload.suburb || null,
+    p_city: payload.city || null,
+    p_province: payload.province || null,
+    p_postal: payload.postal || null,
+    p_notes: payload.notes,
   });
 
-  if (error) return { ok: false, error };
+  // 2) Direct writes — always, so a silent RPC no-op can't drop data
+  const { error: profErr } = await sb.from("profiles").upsert(
+    {
+      id: user.id,
+      full_name: payload.name || "",
+      phone: payload.phone || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
+
+  let addrErr = null;
+  if (payload.street && payload.city && payload.postal) {
+    await sb.from("addresses").delete().eq("user_id", user.id).eq("is_default", true);
+    const ins = await sb.from("addresses").insert({
+      user_id: user.id,
+      street: payload.street,
+      suburb: payload.suburb || null,
+      city: payload.city,
+      province: payload.province || "Gauteng",
+      postal_code: payload.postal,
+      notes: payload.notes || null,
+      is_default: true,
+    });
+    addrErr = ins.error;
+  }
+
+  if (rpcErr && profErr) {
+    return { ok: false, error: rpcErr || profErr };
+  }
+  if (payload.street && addrErr && profErr) {
+    return { ok: false, error: addrErr };
+  }
+
+  // 3) Verify phone landed (or address if provided)
+  const check = await fetchMyProfile(user);
+  const phoneOk = !payload.phone || check.phone === payload.phone;
+  const addrOk =
+    !payload.street ||
+    (check.address?.street === payload.street && check.address?.city === payload.city);
+
+  if (!phoneOk || !addrOk) {
+    // One more forced upsert if verify failed
+    if (!phoneOk) {
+      const { error } = await sb.from("profiles").update({
+        phone: payload.phone || null,
+        full_name: payload.name || check.name,
+        updated_at: new Date().toISOString(),
+      }).eq("id", user.id);
+      if (error) return { ok: false, error };
+    }
+    if (!addrOk && payload.street) {
+      await sb.from("addresses").delete().eq("user_id", user.id).eq("is_default", true);
+      const { error } = await sb.from("addresses").insert({
+        user_id: user.id,
+        street: payload.street,
+        suburb: payload.suburb || null,
+        city: payload.city,
+        province: payload.province || "Gauteng",
+        postal_code: payload.postal,
+        notes: payload.notes || null,
+        is_default: true,
+      });
+      if (error) return { ok: false, error };
+    }
+  }
+
   return { ok: true };
 }
 
@@ -71,32 +159,28 @@ export async function fetchMyProfile(authUser) {
   const sb = browserClient();
   if (!sb) return emptyProfile(authUser);
 
-  // Prefer security-definer RPC — reliable after login
-  try {
-    const { data, error } = await sb.rpc("get_my_profile");
-    if (!error && data && typeof data === "object") {
-      const addr = data.address;
-      return {
-        name: data.full_name || emptyProfile(authUser).name,
-        email: authUser.email,
-        phone: data.phone || "",
-        address: addr && (addr.street || addr.city)
-          ? {
-              street: addr.street || "",
-              suburb: addr.suburb || "",
-              city: addr.city || "",
-              province: addr.province || "",
-              postal: addr.postal || "",
-              notes: addr.notes || "",
-            }
-          : null,
-      };
-    }
-  } catch {
-    // fall through to table reads
+  // Prefer security-definer RPC
+  const { data, error } = await sb.rpc("get_my_profile");
+  if (!error && data && typeof data === "object") {
+    const addr = data.address;
+    return {
+      name: data.full_name || emptyProfile(authUser).name,
+      email: authUser.email,
+      phone: data.phone || "",
+      address: addr && addr.street
+        ? {
+            street: addr.street || "",
+            suburb: addr.suburb || "",
+            city: addr.city || "",
+            province: addr.province || "",
+            postal: addr.postal || "",
+            notes: addr.notes || "",
+          }
+        : null,
+    };
   }
 
-  const [{ data: profile, error: pErr }, { data: addresses, error: aErr }] = await Promise.all([
+  const [{ data: profile }, { data: addresses }] = await Promise.all([
     sb.from("profiles").select("full_name,phone").eq("id", authUser.id).maybeSingle(),
     sb.from("addresses")
       .select("street,suburb,city,province,postal_code,notes,is_default,created_at")
@@ -105,8 +189,6 @@ export async function fetchMyProfile(authUser) {
       .order("created_at", { ascending: false })
       .limit(1),
   ]);
-
-  if (pErr && aErr) return emptyProfile(authUser);
 
   const addr = Array.isArray(addresses) ? addresses[0] : addresses;
   return {
@@ -131,8 +213,6 @@ export async function flushPendingProfile(authUser) {
   if (!authUser?.id || typeof window === "undefined") return;
   let pending = null;
   try { pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "null"); } catch {}
-
-  // Only flush explicitly stashed signup data — never overwrite DB with empty metadata
   if (!pending) return;
 
   const hasPhone = Boolean(pending.phone);

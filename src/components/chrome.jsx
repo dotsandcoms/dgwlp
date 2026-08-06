@@ -18,7 +18,7 @@ export function Header() {
   return (
     <>
       <header className="sticky top-0 z-40" style={{ background: "rgba(255,255,255,.92)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${C.line}` }}>
-        <div className="max-w-[1240px] mx-auto px-5 h-[68px] flex items-center justify-between">
+        <div className="w-full px-5 sm:px-8 h-[68px] flex items-center justify-between">
           <Link href="/" style={{ fontFamily: HEAD, fontWeight: 500 }} className="text-[15px] sm:text-[20px] tracking-[.12em]">
             <span style={{ color: C.ink }}>DORON GOLDSTEIN </span><span style={{ color: C.green }}>PHOTOGRAPHY</span>
           </Link>

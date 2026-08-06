@@ -6,6 +6,7 @@ import { C, HEAD, zar, PROVINCES } from "@/lib/pricing";
 import { Plate, Pill, Row } from "./primitives";
 import { RegisterForm, LoginForm } from "./forms";
 import { useCart, useAuth, useToast } from "@/context/providers";
+import { friendlyError } from "@/lib/errors";
 
 const inp = { className: "w-full py-3 px-3 text-[14px] outline-none", style: { border: `1px solid ${C.line}`, borderRadius: 4 } };
 
@@ -77,8 +78,8 @@ export function CheckoutFlow() {
                 ))}
               </div>
               {authTab === "register"
-                ? <RegisterForm compact onDone={async (d) => { await register(d); setAddr(d.address); setStep(2); toast("Account created"); }} />
-                : <LoginForm onDone={async (d) => { await login(d); setStep(2); toast("Welcome back"); }} />}
+                ? <RegisterForm compact onDone={async (d) => { try { await register(d); setAddr(d.address); setStep(2); toast("Account created"); } catch (e) { toast(friendlyError(e, "Could not create account")); } }} />
+                : <LoginForm onDone={async (d) => { try { await login(d); setStep(2); toast("Welcome back"); } catch (e) { toast(friendlyError(e, "Sign in failed")); } }} />}
             </div>
           )}
 

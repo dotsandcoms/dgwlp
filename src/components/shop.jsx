@@ -24,18 +24,22 @@ export function ShopClient({ products, categories }) {
         </div>
         <span className="text-[13px] text-neutral-500">Showing {list.length} results</span>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
-        {list.map((p, i) => (
-          <Reveal key={p.id} delay={(i % 4) * 80}>
-            <div className="relative">
-              <button onClick={() => toggle(p.id)} className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow" title="Wishlist">
-                <Heart size={16} color={wish.includes(p.id) ? "#c0392b" : C.gray} fill={wish.includes(p.id) ? "#c0392b" : "none"} />
-              </button>
-              <Card p={p} />
-            </div>
-          </Reveal>
-        ))}
-      </div>
+      {list.length === 0 ? (
+        <p className="text-[14px] text-neutral-500 py-16 text-center">No prints in this category yet.</p>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
+          {list.map((p, i) => (
+            <Reveal key={p.id} delay={(i % 4) * 80}>
+              <div className="relative">
+                <button onClick={() => toggle(p.id)} className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow" title="Wishlist">
+                  <Heart size={16} color={wish.includes(p.id) ? "#c0392b" : C.gray} fill={wish.includes(p.id) ? "#c0392b" : "none"} />
+                </button>
+                <Card p={p} />
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

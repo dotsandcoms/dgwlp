@@ -1,6 +1,7 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { C, HEAD, zar, rangeOf } from "@/lib/pricing";
 import { siteImage } from "@/lib/supabase";
 import { Plate, Parallax, Reveal, Pill } from "./primitives";
@@ -19,21 +20,37 @@ export function Card({ p }) {
   );
 }
 
-function ShowPanel({ product, tag, caption, reverse }) {
+function Slideshow({ slides }) {
+  const [i, setI] = useState(0);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (paused) return;
+    const t = setInterval(() => setI((x) => (x + 1) % slides.length), 6000);
+    return () => clearInterval(t);
+  }, [paused, slides.length]);
+  const go = (n) => setI((n + slides.length) % slides.length);
+  const arrow = { position: "absolute", top: "50%", transform: "translateY(-50%)", zIndex: 10, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: C.green, color: "#fff", border: "none", cursor: "pointer" };
   return (
-    <section className="relative flex items-center overflow-hidden" style={{ minHeight: "100vh", background: "#101010" }}>
-      <div className="absolute inset-0 overflow-hidden">
-        <Parallax speed={0.22} className="absolute" style={{ inset: "-14%" }}>
-          <Plate product={product} showSig={false} style={{ width: "100%", height: "100%" }} />
-        </Parallax>
-        <div className="absolute inset-0" style={{ background: reverse ? "linear-gradient(270deg,rgba(0,0,0,.15),rgba(0,0,0,.75))" : "linear-gradient(90deg,rgba(0,0,0,.15),rgba(0,0,0,.75))" }} />
-      </div>
-      <div className={`relative max-w-[1240px] mx-auto px-8 w-full flex ${reverse ? "justify-end text-right" : "justify-start"}`}>
-        <div style={{ maxWidth: 460 }}>
-          <Reveal><p className="tracking-[.3em] text-[13px] mb-3" style={{ fontFamily: HEAD, color: C.green }}>{tag}</p></Reveal>
-          <Reveal delay={100}><h3 className="text-white text-[34px] sm:text-[52px] leading-[1.02] font-light mb-6" style={{ fontFamily: HEAD }}>{caption}</h3></Reveal>
-          <Reveal delay={220}><Link href={`/product/${product.slug}`}><Pill>View “{product.name}” →</Pill></Link></Reveal>
+    <section className="relative w-full overflow-hidden" style={{ height: "82vh", minHeight: 460, background: "#101010" }}
+      onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      {slides.map((s, k) => (
+        <div key={k} className="absolute inset-0" style={{ opacity: k === i ? 1 : 0, transition: "opacity 1.1s ease", pointerEvents: k === i ? "auto" : "none" }}>
+          <div className="absolute inset-0" style={{ backgroundImage: `url(${s.image})`, backgroundSize: "cover", backgroundPosition: "center", filter: "grayscale(1) contrast(1.03)", transform: k === i ? "scale(1.06)" : "scale(1)", transition: "transform 7s ease" }} />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(90deg,rgba(0,0,0,.6),rgba(0,0,0,.15) 55%,rgba(0,0,0,.5))" }} />
+          <div className="relative h-full max-w-[1240px] mx-auto px-8 sm:px-14 flex flex-col justify-center">
+            <p className="tracking-[.3em] text-[12px] sm:text-[13px] mb-3" style={{ fontFamily: HEAD, color: C.green }}>{s.tag}</p>
+            <h3 className="text-white text-[30px] sm:text-[52px] leading-[1.02] font-light mb-6" style={{ fontFamily: HEAD, maxWidth: 560 }}>{s.cap}</h3>
+            <div><Link href={`/product/${s.slug}`}><Pill>View “{s.name}” →</Pill></Link></div>
+          </div>
         </div>
+      ))}
+      <button aria-label="Previous" onClick={() => go(i - 1)} style={{ ...arrow, left: 0 }}><ChevronLeft size={22} /></button>
+      <button aria-label="Next" onClick={() => go(i + 1)} style={{ ...arrow, right: 0 }}><ChevronRight size={22} /></button>
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex gap-2">
+        {slides.map((_, k) => (
+          <button key={k} aria-label={`Slide ${k + 1}`} onClick={() => setI(k)}
+            style={{ width: k === i ? 26 : 8, height: 8, borderRadius: 999, background: k === i ? C.green : "rgba(255,255,255,.65)", border: "none", cursor: "pointer", transition: "all .3s" }} />
+        ))}
       </div>
     </section>
   );
@@ -58,6 +75,10 @@ export function Home({ products }) {
           <Reveal delay={240}><div className="flex items-center gap-4 my-6"><span style={{ width: 60, height: 1, background: C.green }} /><span className="text-[13px] sm:text-[17px] tracking-[.25em]" style={{ fontFamily: HEAD, color: C.green }}>WILDLIFE PHOTOGRAPHY</span><span style={{ width: 60, height: 1, background: C.green }} /></div></Reveal>
           <Reveal delay={360}><Link href="/shop"><Pill>View the Collection →</Pill></Link></Reveal>
         </div>
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 animate-bounce" style={{ pointerEvents: "none" }}>
+          <span className="text-white/80 text-[11px] tracking-[.25em]" style={{ fontFamily: HEAD }}>SCROLL</span>
+          <ChevronDown size={20} color="rgba(255,255,255,.8)" />
+        </div>
       </section>
 
       <section className="max-w-[820px] mx-auto px-5 py-20 text-center">
@@ -66,15 +87,19 @@ export function Home({ products }) {
         </p></Reveal>
       </section>
 
-      {panels.map((s, k) => <ShowPanel key={k} product={{ image: s.image, colour: "bw", name: s.name, slug: s.slug }} tag={s.tag} caption={s.cap} reverse={k % 2 === 1} />)}
-
       <section className="max-w-[1240px] mx-auto px-5 py-20 text-center">
         <Reveal><h2 className="text-[30px] sm:text-[42px] mb-2" style={{ fontFamily: HEAD, color: C.green, letterSpacing: ".04em" }}>LATEST COLLECTION</h2></Reveal>
         <div className="flex justify-center mb-12"><Link href="/shop"><Pill variant="outline" size="sm">VIEW ALL</Pill></Link></div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
-          {products.slice(0, 4).map((p, i) => <Reveal key={p.id} delay={i * 90}><Card p={p} /></Reveal>)}
-        </div>
+        {products.length === 0 ? (
+          <p className="text-[14px] text-neutral-500">New prints are on their way — check back soon.</p>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
+            {products.slice(0, 4).map((p, i) => <Reveal key={p.id} delay={i * 90}><Card p={p} /></Reveal>)}
+          </div>
+        )}
       </section>
+
+      <Slideshow slides={panels} />
     </div>
   );
 }

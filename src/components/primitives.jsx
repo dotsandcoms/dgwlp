@@ -123,15 +123,15 @@ export function Dropdown({ label, value, options, onChange }) {
   );
 }
 
-export function Pill({ children, onClick, variant = "solid", size = "md", style, type }) {
-  const base = { fontFamily: HEAD, letterSpacing: ".06em", cursor: "pointer", borderRadius: 999, transition: "all .2s", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 };
+export function Pill({ children, onClick, variant = "solid", size = "md", style, type, disabled }) {
+  const base = { fontFamily: HEAD, letterSpacing: ".06em", cursor: disabled ? "default" : "pointer", borderRadius: 999, transition: "all .2s", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 };
   const pad = size === "sm" ? "8px 18px" : "13px 30px";
   const v = variant === "solid" ? { background: C.green, color: "#fff", border: "none" }
     : variant === "outline" ? { background: "transparent", color: C.ink, border: `1px solid ${C.ink}` }
       : { background: "#fff", color: C.ink, border: `1px solid ${C.line}` };
-  return <button type={type} onClick={onClick} style={{ ...base, padding: pad, ...v, ...style }}
-    onMouseEnter={(e) => { if (variant === "solid") e.currentTarget.style.background = C.greenDark; }}
-    onMouseLeave={(e) => { if (variant === "solid") e.currentTarget.style.background = C.green; }}>{children}</button>;
+  return <button type={type} disabled={disabled} onClick={onClick} style={{ ...base, padding: pad, ...v, opacity: disabled ? .6 : 1, ...style }}
+    onMouseEnter={(e) => { if (variant === "solid" && !disabled) e.currentTarget.style.background = C.greenDark; }}
+    onMouseLeave={(e) => { if (variant === "solid" && !disabled) e.currentTarget.style.background = C.green; }}>{children}</button>;
 }
 
 export const Row = ({ l, v, bold }) => (
@@ -140,6 +140,12 @@ export const Row = ({ l, v, bold }) => (
   </div>
 );
 export function StatusBadge({ s }) {
-  const map = { Delivered: C.green, Shipped: "#2563eb", Processing: "#b45309" };
-  return <span className="text-[12px] px-2.5 py-1 rounded-full" style={{ background: `${map[s]}18`, color: map[s], fontFamily: HEAD }}>{s}</span>;
+  const map = {
+    Delivered: C.green, Shipped: "#2563eb", Processing: "#b45309",
+    pending: "#b45309", paid: C.green, shipped: "#2563eb", delivered: C.green,
+    cancelled: "#dc2626", refunded: C.gray,
+  };
+  const colour = map[s] || C.gray;
+  const label = /^[a-z]/.test(s || "") ? s[0].toUpperCase() + s.slice(1) : s;
+  return <span className="text-[12px] px-2.5 py-1 rounded-full" style={{ background: `${colour}18`, color: colour, fontFamily: HEAD }}>{label}</span>;
 }

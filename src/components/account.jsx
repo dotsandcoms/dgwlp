@@ -1,17 +1,20 @@
 "use client";
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { User, LogOut, MapPin } from "lucide-react";
 import { C, HEAD, zar } from "@/lib/pricing";
 import { MOCK_ORDERS } from "@/lib/mock";
 import { Pill, StatusBadge } from "./primitives";
 import { RegisterForm, LoginForm } from "./forms";
 import { useAuth, useToast } from "@/context/providers";
+import { friendlyError } from "@/lib/errors";
 
 export function AuthView() {
   const { register, login } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") || "/account";
   const [tab, setTab] = useState("register");
   return (
     <div className="max-w-[560px] mx-auto px-5 py-12">
@@ -22,8 +25,8 @@ export function AuthView() {
         ))}
       </div>
       {tab === "register"
-        ? <RegisterForm onDone={async (d) => { await register(d); toast(`Welcome, ${d.name.split(" ")[0]}`); router.push("/account"); }} />
-        : <LoginForm onDone={async (d) => { await login(d); toast("Welcome back"); router.push("/account"); }} />}
+        ? <RegisterForm onDone={async (d) => { try { await register(d); toast(`Welcome, ${d.name.split(" ")[0]}`); router.push(next); } catch (e) { toast(friendlyError(e, "Could not create account")); } }} />
+        : <LoginForm onDone={async (d) => { try { await login(d); toast("Welcome back"); router.push(next); } catch (e) { toast(friendlyError(e, "Sign in failed")); } }} />}
     </div>
   );
 }

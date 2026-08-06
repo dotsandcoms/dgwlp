@@ -59,8 +59,37 @@ export const ROOMS = [
 export const sizesOf = (p) => (RATIOS[p.ratio] || RATIOS.landscape).sizes;
 export const priceOf = (size, matId) => PRICING[size][MATERIALS.find((m) => m.id === matId).i];
 export const rangeOf = (p) => {
+  if (p.priceRange) return p.priceRange;
+  if (p.variants) {
+    const vals = Object.values(p.variants).filter((v) => v > 0);
+    return vals.length ? [Math.min(...vals), Math.max(...vals)] : [0, 0];
+  }
   const all = [];
   sizesOf(p).forEach((s) => PRICING[s].forEach((v) => all.push(v)));
   return [Math.min(...all), Math.max(...all)];
 };
 export const sizeLabel = (s) => { const [w, h] = s.split("x"); return `${w} × ${h} mm`; };
+
+// Product-aware price lookups: use a product's real Supabase variant prices
+// (product.variants: { "size:material": rands }) when present, otherwise
+// fall back to the static price list (demo/mock products).
+export const priceOfVariant = (product, size, matId) => {
+  if (product.variants) return product.variants[`${size}:${matId}`] ?? 0;
+  return priceOf(size, matId);
+};
+export const minPriceForSize = (product, size) => {
+  if (product.variants) {
+    const vals = MATERIALS.map((m) => product.variants[`${size}:${m.id}`]).filter((v) => v > 0);
+    return vals.length ? Math.min(...vals) : 0;
+  }
+  return Math.min(...PRICING[size]);
+};
+export const availableSizesOf = (product) => {
+  const sizes = sizesOf(product);
+  if (!product.variants) return sizes;
+  return sizes.filter((s) => MATERIALS.some((m) => product.variants[`${s}:${m.id}`] > 0));
+};
+export const availableMaterialsFor = (product, size) => {
+  if (!product.variants) return MATERIALS;
+  return MATERIALS.filter((m) => product.variants[`${size}:${m.id}`] > 0);
+};

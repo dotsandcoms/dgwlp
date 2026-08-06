@@ -1,25 +1,28 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { X, Minus, Plus, Truck, ShieldCheck, Heart } from "lucide-react";
-import { C, HEAD, zar, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizesOf, priceOf, sizeLabel, PRICING } from "@/lib/pricing";
+import { C, HEAD, zar, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, minPriceForSize, availableSizesOf, availableMaterialsFor } from "@/lib/pricing";
 import { Plate, Scene, RoomPreview, Dropdown, Pill } from "./primitives";
 import { useCart, useToast } from "@/context/providers";
 
 export function ProductDetail({ product }) {
   const cart = useCart();
   const { toast } = useToast();
-  const sizes = sizesOf(product);
-  const [size, setSize] = useState(sizes[0]);
-  const [material, setMaterial] = useState("paper");
+  const sizes = availableSizesOf(product);
+  const [size, setSize] = useState(sizes[0] || "");
+  const matsForSize = availableMaterialsFor(product, size);
+  const [material, setMaterial] = useState(matsForSize[0]?.id || "paper");
   const [frameCol, setFrameCol] = useState("black");
   const [room, setRoom] = useState("lounge");
   const [qty, setQty] = useState(1);
   const [wish, setWish] = useState(false);
   const [zoom, setZoom] = useState(false);
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem("dg_wish") || "[]"); setWish(s.includes(product.id)); } catch {} }, [product.id]);
+  // Some sizes may not offer every finish — snap to one that's actually priced.
+  useEffect(() => { if (!matsForSize.some((m) => m.id === material)) setMaterial(matsForSize[0]?.id || "paper"); }, [size]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const mat = MATERIALS.find((m) => m.id === material);
-  const unit = priceOf(size, material);
+  const mat = MATERIALS.find((m) => m.id === material) || MATERIALS[0];
+  const unit = priceOfVariant(product, size, material);
   const summary = [sizeLabel(size), mat.label, mat.framed ? FRAME_COLOURS.find((f) => f.id === frameCol)?.label + " frame" : null].filter(Boolean).join(" · ");
 
   const toggleWish = () => { try { const s = JSON.parse(localStorage.getItem("dg_wish") || "[]"); const n = s.includes(product.id) ? s.filter((x) => x !== product.id) : [...s, product.id]; localStorage.setItem("dg_wish", JSON.stringify(n)); setWish(n.includes(product.id)); toast(n.includes(product.id) ? "Saved to wishlist" : "Removed from wishlist"); } catch {} };
@@ -28,6 +31,15 @@ export function ProductDetail({ product }) {
     cart.add({ key: Math.random().toString(36).slice(2), id: product.id, product, name: product.name, size, material, frameCol, room, price: unit, qty, summary });
     toast("Added to your cart"); cart.setOpen(true);
   };
+
+  if (sizes.length === 0) {
+    return (
+      <div className="max-w-[600px] mx-auto px-5 py-24 text-center">
+        <h2 className="text-[26px] mb-3" style={{ fontFamily: HEAD, fontWeight: 300 }}>{product.name}</h2>
+        <p className="text-[14px] text-neutral-500">This print isn't currently available for order — check back soon.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-[1240px] mx-auto px-5 py-8">
@@ -56,8 +68,8 @@ export function ProductDetail({ product }) {
           <div className="text-[12px] text-neutral-500 mb-5">{RATIOS[product.ratio].label} · limited edition</div>
           <p className="text-[15px] leading-relaxed text-neutral-700 mb-8">{product.desc}</p>
 
-          <Dropdown label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: `${sizeLabel(s)} — from ${zar(Math.min(...PRICING[s]))}` }))} />
-          <Dropdown label="Print & finish" value={material} onChange={setMaterial} options={MATERIALS.map((m) => ({ value: m.id, label: `${m.label} — ${zar(priceOf(size, m.id))}` }))} />
+          <Dropdown label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: `${sizeLabel(s)} — from ${zar(minPriceForSize(product, s))}` }))} />
+          <Dropdown label="Print & finish" value={material} onChange={setMaterial} options={matsForSize.map((m) => ({ value: m.id, label: `${m.label} — ${zar(priceOfVariant(product, size, m.id))}` }))} />
           {mat.framed && <Dropdown label="Frame colour" value={frameCol} onChange={setFrameCol} options={FRAME_COLOURS.map((f) => ({ value: f.id, label: f.label }))} />}
 
           <div className="flex items-center gap-4 mt-2">

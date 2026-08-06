@@ -23,6 +23,31 @@ body {
 
 @keyframes dgin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
+/* 404 — soft-focus field + aperture breathe */
+@keyframes nf-drift {
+  0% { transform: scale(1.08) translate3d(-1.2%, 0.6%, 0); }
+  50% { transform: scale(1.14) translate3d(1.4%, -0.8%, 0); }
+  100% { transform: scale(1.08) translate3d(-1.2%, 0.6%, 0); }
+}
+@keyframes nf-aperture {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.035); opacity: 1; }
+}
+@keyframes nf-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+.nf-drift { animation: nf-drift 22s ease-in-out infinite; will-change: transform; }
+.nf-aperture { animation: nf-aperture 4.8s ease-in-out infinite; }
+.nf-in {
+  opacity: 0;
+  animation: nf-in 0.85s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nf-drift, .nf-aperture { animation: none; }
+  .nf-in { opacity: 1; animation: none; }
+}
+
 /* Google Places suggestions above sticky chrome / modals */
 .pac-container {
   z-index: 10000 !important;

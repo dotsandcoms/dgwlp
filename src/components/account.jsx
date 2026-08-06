@@ -7,12 +7,12 @@ import {
   Truck, CreditCard, CheckCircle2, Circle, ShoppingBag, Pencil, Loader2,
 } from "lucide-react";
 import { C, HEAD, zar } from "@/lib/pricing";
-import { MOCK_ORDERS } from "@/lib/mock";
 import { Pill, StatusBadge, Plate, Reveal } from "./primitives";
 import { AddressFields } from "./address-fields";
 import { emptyAddress } from "@/lib/address";
 import { useAuth, useToast, useAuthModal } from "@/context/providers";
 import { friendlyError } from "@/lib/errors";
+import { fetchMyOrders } from "@/lib/orders";
 
 /** Opens the auth modal from /auth?tab=&next= then returns to the previous page (or home). */
 export function AuthView() {
@@ -66,13 +66,14 @@ function fromLastOrder(raw) {
   };
 }
 
-function loadOrders() {
-  const list = [...MOCK_ORDERS];
+/** Fallback when Supabase has no rows yet (e.g. offline demo / last checkout). */
+function loadLocalOrders() {
   try {
     const last = fromLastOrder(JSON.parse(localStorage.getItem("dg_last_order") || "null"));
-    if (last && !list.some((o) => o.id === last.id)) list.unshift(last);
-  } catch {}
-  return list;
+    return last ? [last] : [];
+  } catch {
+    return [];
+  }
 }
 
 function statusSteps(status) {
@@ -278,12 +279,33 @@ export function AccountView() {
   const [form, setForm] = useState({ name: "", phone: "", address: emptyAddress() });
 
   useEffect(() => {
-    setOrders(loadOrders());
     try {
       const w = JSON.parse(localStorage.getItem("dg_wish") || "[]");
       setWishCount(Array.isArray(w) ? w.length : 0);
     } catch { setWishCount(0); }
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setOrders([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await fetchMyOrders();
+        if (cancelled) return;
+        if (rows.length) {
+          setOrders(rows);
+          return;
+        }
+        setOrders(loadLocalOrders());
+      } catch {
+        if (!cancelled) setOrders(loadLocalOrders());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;

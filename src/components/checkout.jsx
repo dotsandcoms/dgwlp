@@ -10,6 +10,7 @@ import { emptyAddress } from "@/lib/address";
 import { DEFAULT_SETTINGS, orderTotals, shippingCost } from "@/lib/settings";
 import { useCart, useAuth, useToast } from "@/context/providers";
 import { friendlyError } from "@/lib/errors";
+import { placeOrder } from "@/lib/orders";
 
 export function CheckoutFlow() {
   const cart = useCart();
@@ -73,24 +74,44 @@ export function CheckoutFlow() {
   };
 
   const place = async () => {
-    const order = {
-      id: "DG-" + Math.floor(1000 + Math.random() * 9000),
-      items: cart.items,
-      subtotal: cart.subtotal,
-      shipping: shipCost,
-      tax: taxCost,
-      taxLabel,
-      total,
-      delivery: addr,
-      pay,
-      email: user?.email,
-    };
-    await saveDeliveryToProfile(addr);
-    try { localStorage.setItem("dg_last_order", JSON.stringify(order)); } catch {}
-    try { await fetch("/api/email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "receipt", order }) }); } catch {}
-    cart.clear();
-    toast("Order placed — thank you!");
-    router.push("/order/success");
+    if (!user?.email) {
+      toast("Please sign in to place an order");
+      setStep(1);
+      return;
+    }
+    try {
+      await saveDeliveryToProfile(addr);
+      const result = await placeOrder({
+        user,
+        email: user.email,
+        items: cart.items,
+        subtotal: cart.subtotal,
+        shipping: shipCost,
+        total,
+        delivery: addr,
+        pay,
+        shipMethod: ship,
+      });
+      const order = {
+        ...result.order,
+        tax: taxCost,
+        taxLabel,
+        email: user.email,
+      };
+      try { localStorage.setItem("dg_last_order", JSON.stringify(order)); } catch {}
+      try {
+        await fetch("/api/email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "receipt", order }),
+        });
+      } catch {}
+      cart.clear();
+      toast(result.localOnly ? "Order placed (demo mode)" : "Order placed — thank you!");
+      router.push("/order/success");
+    } catch (e) {
+      toast(friendlyError(e, "Could not place order"));
+    }
   };
 
   if (cart.items.length === 0) return (

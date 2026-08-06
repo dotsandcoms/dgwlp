@@ -6,16 +6,20 @@ import { createClient } from "@supabase/supabase-js";
  * Server-only aliases (SUPABASE_URL / SUPABASE_ANON_KEY) are accepted as a
  * fallback so SSR catalogue reads still work if PUBLIC_ was stripped by mistake.
  */
+function env(name) {
+  const v = process.env[name];
+  return typeof v === "string" ? v.trim() : "";
+}
+
+// Trailing newlines/spaces from Vercel/dashboard pastes break CSS url(...) images.
 const url =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_SUPABASE_URL ||
-  process.env.SUPABASE_URL ||
-  "";
+  env("NEXT_PUBLIC_SUPABASE_URL") ||
+  env("NEXT_SUPABASE_URL") ||
+  env("SUPABASE_URL");
 const anon =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.NEXT_SUPABASE_ANON_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  "";
+  env("NEXT_PUBLIC_SUPABASE_ANON_KEY") ||
+  env("NEXT_SUPABASE_ANON_KEY") ||
+  env("SUPABASE_ANON_KEY");
 
 export const hasSupabase = Boolean(url && anon);
 
@@ -51,9 +55,11 @@ export function browserClient() {
 // Build a public URL for an image stored in the `prints` bucket (product photos).
 export function imageUrl(path) {
   if (!path) return null;
-  if (path.startsWith("http")) return path;
+  const clean = String(path).trim().replace(/^\/+/, "");
+  if (!clean) return null;
+  if (clean.startsWith("http://") || clean.startsWith("https://")) return clean;
   if (!url) return null;
-  return `${url}/storage/v1/object/public/prints/${path}`;
+  return `${url}/storage/v1/object/public/prints/${clean}`;
 }
 
 // Website furniture (hero, scroller panoramas) lives in the `images` bucket.

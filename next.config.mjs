@@ -1,4 +1,22 @@
 /** @type {import('next').NextConfig} */
+
+const supabaseHost = (
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  ""
+)
+  .trim()
+  .replace(/^https?:\/\//, "")
+  .replace(/\/.*$/, "");
+
+const supabaseImg = supabaseHost
+  ? `https://${supabaseHost}`
+  : "https://*.supabase.co";
+const supabaseConnect = supabaseHost
+  ? `https://${supabaseHost} wss://${supabaseHost}`
+  : "https://*.supabase.co wss://*.supabase.co";
+
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -22,9 +40,9 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' data: blob: https://*.supabase.co https://maps.gstatic.com https://maps.googleapis.com https://*.googleapis.com",
+              `img-src 'self' data: blob: https://*.supabase.co ${supabaseImg} https://maps.gstatic.com https://maps.googleapis.com https://*.googleapis.com`,
               "font-src 'self' https://fonts.gstatic.com data:",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://maps.googleapis.com https://places.googleapis.com https://api.resend.com",
+              `connect-src 'self' https://*.supabase.co wss://*.supabase.co ${supabaseConnect} https://maps.googleapis.com https://places.googleapis.com https://api.resend.com`,
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",

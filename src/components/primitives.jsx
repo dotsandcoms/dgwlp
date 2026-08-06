@@ -3,17 +3,19 @@ import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import { C, HEAD, BODY, RATIOS, SCALE, FRAME_COLOURS } from "@/lib/pricing";
 
-export function Plate({ product, className, style, showSig = true }) {
-  const bw = product.colour === "bw";
+export function Plate({ product, className, style, showSig = true, printColour }) {
+  // printColour ('bw' | 'colour') overrides product.colour — used when product offers both.
+  const mode = printColour || (product.colour === "both" ? "colour" : product.colour);
+  const bw = mode === "bw";
   if (product.image) {
     return (
-      <div className={className} style={{ position: "relative", overflow: "hidden", backgroundImage: `url(${product.image})`, backgroundSize: "cover", backgroundPosition: "center", filter: bw ? "grayscale(1) contrast(1.03)" : "none", ...style }}>
+      <div className={className} style={{ position: "relative", overflow: "hidden", backgroundImage: `url(${product.image})`, backgroundSize: "cover", backgroundPosition: "center", filter: bw ? "grayscale(1) contrast(1.03)" : "none", transition: "filter .35s ease", ...style }}>
         {showSig && <span style={sigStyle}>Doron Goldstein ©</span>}
       </div>
     );
   }
   return (
-    <div className={className} style={{ position: "relative", overflow: "hidden", backgroundImage: `linear-gradient(${product.angle || 120}deg, ${product.grad[0]}, ${product.grad[1]})`, filter: bw ? "grayscale(1) contrast(1.05)" : "saturate(1.05)", ...style }}>
+    <div className={className} style={{ position: "relative", overflow: "hidden", backgroundImage: `linear-gradient(${product.angle || 120}deg, ${product.grad[0]}, ${product.grad[1]})`, filter: bw ? "grayscale(1) contrast(1.05)" : "saturate(1.05)", transition: "filter .35s ease", ...style }}>
       <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px)", backgroundSize: "3px 3px", opacity: .5 }} />
       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", padding: "7%" }}>
         <span style={{ fontFamily: HEAD, letterSpacing: ".22em", textTransform: "uppercase", color: "rgba(255,255,255,.82)", fontSize: "clamp(9px,1.5vw,15px)", fontWeight: 300 }}>{product.name}</span>
@@ -65,7 +67,7 @@ export const artworkStyle = (matId, frameCol) => {
   }
 };
 
-export function RoomPreview({ product, size, material, frameCol, room, onZoom }) {
+export function RoomPreview({ product, size, material, frameCol, room, onZoom, printColour }) {
   return (
     <div style={{ position: "relative", width: "100%", aspectRatio: "4/3", overflow: "hidden", borderRadius: 4, border: `1px solid ${C.line}` }}>
       <Scene room={room} />
@@ -74,7 +76,7 @@ export function RoomPreview({ product, size, material, frameCol, room, onZoom })
       </button>
       <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-52%)", width: `${SCALE[size]}%`, transition: "all .4s ease" }}>
         <div style={artworkStyle(material, frameCol)}>
-          <Plate product={product} style={{ width: "100%", aspectRatio: RATIOS[product.ratio].ar }} />
+          <Plate product={product} printColour={printColour} style={{ width: "100%", aspectRatio: RATIOS[product.ratio].ar }} />
         </div>
       </div>
     </div>

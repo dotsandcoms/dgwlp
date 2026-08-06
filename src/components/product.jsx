@@ -5,10 +5,14 @@ import { C, HEAD, zar, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, price
 import { Plate, Scene, RoomPreview, Dropdown, Pill } from "./primitives";
 import { useCart, useToast } from "@/context/providers";
 
+const COLOUR_LABEL = { bw: "Black & White", colour: "Colour" };
+
 export function ProductDetail({ product }) {
   const cart = useCart();
   const { toast } = useToast();
   const sizes = availableSizesOf(product);
+  const offersBoth = product.colour === "both";
+  const [printColour, setPrintColour] = useState(offersBoth ? "colour" : (product.colour || "bw"));
   const [size, setSize] = useState(sizes[0] || "");
   const matsForSize = availableMaterialsFor(product, size);
   const [material, setMaterial] = useState(matsForSize[0]?.id || "paper");
@@ -17,18 +21,40 @@ export function ProductDetail({ product }) {
   const [qty, setQty] = useState(1);
   const [wish, setWish] = useState(false);
   const [zoom, setZoom] = useState(false);
+
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem("dg_wish") || "[]"); setWish(s.includes(product.id)); } catch {} }, [product.id]);
-  // Some sizes may not offer every finish — snap to one that's actually priced.
   useEffect(() => { if (!matsForSize.some((m) => m.id === material)) setMaterial(matsForSize[0]?.id || "paper"); }, [size]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!offersBoth) setPrintColour(product.colour === "colour" ? "colour" : "bw");
+  }, [product.colour, offersBoth]);
 
   const mat = MATERIALS.find((m) => m.id === material) || MATERIALS[0];
   const unit = priceOfVariant(product, size, material);
-  const summary = [sizeLabel(size), mat.label, mat.framed ? FRAME_COLOURS.find((f) => f.id === frameCol)?.label + " frame" : null].filter(Boolean).join(" · ");
+  const colourLabel = COLOUR_LABEL[printColour] || COLOUR_LABEL.bw;
+  const summary = [
+    colourLabel,
+    sizeLabel(size),
+    mat.label,
+    mat.framed ? FRAME_COLOURS.find((f) => f.id === frameCol)?.label + " frame" : null,
+  ].filter(Boolean).join(" · ");
 
   const toggleWish = () => { try { const s = JSON.parse(localStorage.getItem("dg_wish") || "[]"); const n = s.includes(product.id) ? s.filter((x) => x !== product.id) : [...s, product.id]; localStorage.setItem("dg_wish", JSON.stringify(n)); setWish(n.includes(product.id)); toast(n.includes(product.id) ? "Saved to wishlist" : "Removed from wishlist"); } catch {} };
 
   const addToCart = () => {
-    cart.add({ key: Math.random().toString(36).slice(2), id: product.id, product, name: product.name, size, material, frameCol, room, price: unit, qty, summary });
+    cart.add({
+      key: Math.random().toString(36).slice(2),
+      id: product.id,
+      product: { ...product, colour: printColour },
+      name: product.name,
+      size,
+      material,
+      frameCol,
+      room,
+      printColour,
+      price: unit,
+      qty,
+      summary,
+    });
     toast("Added to your cart"); cart.setOpen(true);
   };
 
@@ -48,7 +74,7 @@ export function ProductDetail({ product }) {
       </div>
       <div className="grid md:grid-cols-2 gap-10">
         <div>
-          <RoomPreview product={product} size={size} material={material} frameCol={frameCol} room={room} onZoom={() => setZoom(true)} />
+          <RoomPreview product={product} printColour={printColour} size={size} material={material} frameCol={frameCol} room={room} onZoom={() => setZoom(true)} />
           <div className="flex gap-3 mt-4 overflow-x-auto pb-1 no-scrollbar">
             {ROOMS.map((r) => (
               <button key={r.id} onClick={() => setRoom(r.id)} className="shrink-0 rounded overflow-hidden" style={{ width: 88, height: 66, position: "relative", border: `2px solid ${room === r.id ? C.green : C.line}` }}>
@@ -67,6 +93,23 @@ export function ProductDetail({ product }) {
           <div className="text-[22px] mb-1" style={{ fontFamily: HEAD }}>{zar(unit)}</div>
           <div className="text-[12px] text-neutral-500 mb-5">{RATIOS[product.ratio].label} · limited edition</div>
           <p className="text-[15px] leading-relaxed text-neutral-700 mb-8">{product.desc}</p>
+
+          {offersBoth ? (
+            <Dropdown
+              label="Print colour"
+              value={printColour}
+              onChange={setPrintColour}
+              options={[
+                { value: "colour", label: "Colour" },
+                { value: "bw", label: "Black & White" },
+              ]}
+            />
+          ) : (
+            <div className="mb-5">
+              <div style={{ fontFamily: HEAD, letterSpacing: ".05em" }} className="text-[15px] mb-2 text-neutral-700">Print colour</div>
+              <div className="text-[15px] py-2" style={{ borderBottom: `1px solid ${C.ink}` }}>{COLOUR_LABEL[product.colour] || COLOUR_LABEL.bw}</div>
+            </div>
+          )}
 
           <Dropdown label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: `${sizeLabel(s)} — from ${zar(minPriceForSize(product, s))}` }))} />
           <Dropdown label="Print & finish" value={material} onChange={setMaterial} options={matsForSize.map((m) => ({ value: m.id, label: `${m.label} — ${zar(priceOfVariant(product, size, m.id))}` }))} />
@@ -94,8 +137,8 @@ export function ProductDetail({ product }) {
         <div onClick={() => setZoom(false)} className="fixed inset-0 z-[60] flex items-center justify-center p-6" style={{ background: "rgba(15,15,13,.94)" }}>
           <button className="absolute top-5 right-5 text-white" onClick={() => setZoom(false)}><X size={30} /></button>
           <div style={{ maxWidth: 760, width: "100%" }}>
-            <Plate product={product} style={{ width: "100%", aspectRatio: RATIOS[product.ratio].ar, borderRadius: 4 }} />
-            <p className="text-center text-white/70 text-[13px] mt-4" style={{ fontFamily: HEAD, letterSpacing: ".1em" }}>{product.name.toUpperCase()}</p>
+            <Plate product={product} printColour={printColour} style={{ width: "100%", aspectRatio: RATIOS[product.ratio].ar, borderRadius: 4 }} />
+            <p className="text-center text-white/70 text-[13px] mt-4" style={{ fontFamily: HEAD, letterSpacing: ".1em" }}>{product.name.toUpperCase()} · {colourLabel.toUpperCase()}</p>
           </div>
         </div>
       )}

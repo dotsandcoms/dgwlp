@@ -90,7 +90,7 @@ create table if not exists products (
   sku text,
   category_id uuid references categories(id) on delete set null,
   ratio_id text not null references ratios(id),
-  colour text not null default 'bw' check (colour in ('bw','colour')),
+  colour text not null default 'bw' check (colour in ('bw','colour','both')),
   description text,
   hero_image text,                              -- storage path (bucket: prints)
   is_published boolean default false,

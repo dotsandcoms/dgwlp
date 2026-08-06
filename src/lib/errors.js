@@ -7,6 +7,7 @@ const KNOWN = [
   [/password should be at least/i, "Please use a longer password (at least 6 characters)."],
   [/rate limit/i, "Too many attempts — please wait a moment and try again."],
   [/products_slug_key/i, "A print with that name already exists — try a slightly different name."],
+  [/products_colour_check/i, "Colour must be Black & White, Colour, or Both. Run the colour migration in Supabase if you haven't yet."],
   [/categories_slug_key/i, "A category with that name already exists."],
   [/duplicate key value violates unique constraint/i, "That already exists — try a different name."],
   [/violates row-level security policy/i, "You don't have permission to do that."],

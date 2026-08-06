@@ -215,7 +215,8 @@ async function main() {
     try {
       const prepared = await prepareImage(job.filePath);
       const ratio = classifyRatio(prepared.width, prepared.height, job.filename);
-      const enabledSizes = (sizesByRatio.get(ratio) || []).slice(0, 2); // admin default: first 2 sizes
+      // Every size on the price list for this ratio (Landscape 4 / Pano 3 / Pan2 4 / Portrait 4).
+      const enabledSizes = sizesByRatio.get(ratio) || [];
       if (!enabledSizes.length) throw new Error(`No sizes for ratio ${ratio}`);
 
       const variants = [];

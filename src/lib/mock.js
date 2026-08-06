@@ -31,8 +31,54 @@ export const MOCK_PRODUCTS = [
 export const MOCK_CATEGORIES = ["Big Cats", "Elephants", "Rhino", "Plains Game", "Birds", "Landscapes", "Black & White"];
 
 export const MOCK_ORDERS = [
-  { id: "DG-1042", date: "28 Jul 2026", items: "Leopard — Colour · Paper framed · Large", total: 5300, status: "Delivered" },
-  { id: "DG-1039", date: "21 Jul 2026", items: "Elephant Herd · Canvas mounted +1", total: 6600, status: "Shipped" },
-  { id: "DG-1031", date: "02 Jul 2026", items: "Lion · Canvas framed · XL", total: 7500, status: "Delivered" },
+  {
+    id: "DG-1042",
+    date: "28 Jul 2026",
+    itemsSummary: "Leopard — Colour · Paper framed · Large",
+    itemCount: 1,
+    subtotal: 5300,
+    shipping: 0,
+    total: 5300,
+    status: "Delivered",
+    pay: "PayFast",
+    tracking: "CN458291037ZA",
+    delivery: { street: "14 Rosebank Avenue", suburb: "Parktown North", city: "Johannesburg", province: "Gauteng", postal: "2193" },
+    lines: [
+      { name: "Leopard — Colour", summary: "Paper — framed · 1200 × 800 mm · Black", qty: 1, price: 5300, colour: "colour", ratio: "landscape", grad: ["#7c5f36", "#d9c39a"], angle: 120 },
+    ],
+  },
+  {
+    id: "DG-1039",
+    date: "21 Jul 2026",
+    itemsSummary: "Elephant Herd · Canvas mounted +1",
+    itemCount: 2,
+    subtotal: 6300,
+    shipping: 300,
+    total: 6600,
+    status: "Shipped",
+    pay: "Paystack",
+    tracking: "CN458188204ZA",
+    delivery: { street: "14 Rosebank Avenue", suburb: "Parktown North", city: "Johannesburg", province: "Gauteng", postal: "2193" },
+    lines: [
+      { name: "Elephant Herd", summary: "Canvas — mounted · 1200 × 600 mm", qty: 1, price: 3900, colour: "bw", ratio: "pan2", image: siteImage("elephant-herd.jpg"), grad: ["#3a3733", "#a7a29a"], angle: 130 },
+      { name: "Wildebeest at Dawn", summary: "Paper — unframed · 900 × 600 mm", qty: 1, price: 2400, colour: "bw", ratio: "landscape", image: siteImage("hero.jpg"), grad: ["#2e2e2e", "#b7b4ad"], angle: 115 },
+    ],
+  },
+  {
+    id: "DG-1031",
+    date: "02 Jul 2026",
+    itemsSummary: "Lion · Canvas framed · XL",
+    itemCount: 1,
+    subtotal: 7500,
+    shipping: 0,
+    total: 7500,
+    status: "Delivered",
+    pay: "PayFast",
+    tracking: null,
+    delivery: { street: "14 Rosebank Avenue", suburb: "Parktown North", city: "Johannesburg", province: "Gauteng", postal: "2193" },
+    lines: [
+      { name: "Lion", summary: "Canvas — framed · 1500 × 1000 mm · Oak", qty: 1, price: 7500, colour: "bw", ratio: "landscape", grad: ["#2b2b2b", "#8f8b83"], angle: 110 },
+    ],
+  },
 ];
 export const SALES = [{ m: "Feb", v: 18400 }, { m: "Mar", v: 26900 }, { m: "Apr", v: 22200 }, { m: "May", v: 34800 }, { m: "Jun", v: 31500 }, { m: "Jul", v: 47200 }];

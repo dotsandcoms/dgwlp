@@ -1,17 +1,148 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, ShoppingBag, User, Minus, Plus, Trash2, Check, ShieldCheck, Mail } from "lucide-react";
+import { Menu, X, ShoppingBag, User, Minus, Plus, Trash2, Check, ShieldCheck, Mail, Search } from "lucide-react";
 import { C, HEAD, zar } from "@/lib/pricing";
 import { Plate, Pill, Row } from "./primitives";
 import { useCart, useAuth, useToast } from "@/context/providers";
+import { browserClient, hasSupabase, imageUrl } from "@/lib/supabase";
+import { MOCK_PRODUCTS } from "@/lib/mock";
 
 const LINKS = [["HOME", "/"], ["ABOUT", "/about"], ["SHOP", "/shop"], ["CONTACT", "/contact"]];
+
+function matchQuery(p, q) {
+  if (!q) return true;
+  const hay = `${p.name || ""} ${p.category || ""} ${p.desc || p.description || ""} ${p.sku || ""}`.toLowerCase();
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+}
+
+function SiteSearch({ open, onClose }) {
+  const router = useRouter();
+  const inputRef = useRef(null);
+  const [q, setQ] = useState("");
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setQ("");
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { clearTimeout(t); document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        if (hasSupabase) {
+          const sb = browserClient();
+          const { data } = await sb.from("products")
+            .select("id,slug,name,sku,colour,hero_image,description,categories(name)")
+            .eq("is_published", true)
+            .order("name");
+          if (cancelled) return;
+          setProducts((data || []).map((row) => ({
+            id: row.id,
+            slug: row.slug,
+            name: row.name,
+            sku: row.sku,
+            colour: row.colour,
+            desc: row.description || "",
+            category: row.categories?.name || "",
+            image: imageUrl(row.hero_image),
+            grad: ["#333", "#9a9a97"],
+            angle: 120,
+          })));
+        } else {
+          setProducts(MOCK_PRODUCTS);
+        }
+      } catch {
+        if (!cancelled) setProducts(MOCK_PRODUCTS);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
+  const results = useMemo(() => {
+    if (!q.trim()) return [];
+    return products.filter((p) => matchQuery(p, q)).slice(0, 12);
+  }, [products, q]);
+
+  const goShop = () => {
+    const term = q.trim();
+    onClose();
+    router.push(term ? `/shop?q=${encodeURIComponent(term)}` : "/shop");
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col" role="dialog" aria-modal="true" aria-label="Search prints">
+      <div className="absolute inset-0" style={{ background: "rgba(20,20,18,.5)" }} onClick={onClose} />
+      <div className="relative bg-white shadow-lg" style={{ borderBottom: `1px solid ${C.line}` }}>
+        <div className="max-w-[720px] mx-auto px-5 py-5">
+          <div className="flex items-center gap-3" style={{ borderBottom: `1px solid ${C.ink}` }}>
+            <Search size={20} color={C.gray} />
+            <input
+              ref={inputRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") goShop(); }}
+              placeholder="Search prints, categories…"
+              className="flex-1 py-3 text-[18px] outline-none bg-transparent"
+              style={{ fontFamily: HEAD }}
+            />
+            <button onClick={onClose} aria-label="Close search" className="p-1 text-neutral-500 hover:text-black"><X size={22} /></button>
+          </div>
+
+          <div className="mt-4 max-h-[60vh] overflow-y-auto">
+            {loading && <p className="text-[13px] text-neutral-500 py-6">Loading catalogue…</p>}
+            {!loading && q.trim() && results.length === 0 && (
+              <p className="text-[14px] text-neutral-500 py-6">No prints match “{q.trim()}”.</p>
+            )}
+            {!loading && results.map((p) => (
+              <Link
+                key={p.id}
+                href={`/product/${p.slug}`}
+                onClick={onClose}
+                className="flex items-center gap-3 py-3 hover:bg-[#faf9f6] px-1"
+                style={{ borderBottom: `1px solid ${C.line}` }}
+              >
+                <Plate product={p} showSig={false} style={{ width: 48, height: 48, borderRadius: 4, flexShrink: 0 }} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] truncate" style={{ fontFamily: HEAD }}>{p.name}</div>
+                  <div className="text-[12px] text-neutral-500">{p.category}</div>
+                </div>
+              </Link>
+            ))}
+            {!loading && q.trim() && (
+              <button onClick={goShop} className="w-full text-left py-4 text-[13px]" style={{ fontFamily: HEAD, color: C.green }}>
+                View all results in shop →
+              </button>
+            )}
+            {!loading && !q.trim() && (
+              <p className="text-[13px] text-neutral-500 py-6">Type a print name or category — or browse the <Link href="/shop" onClick={onClose} style={{ color: C.green }}>shop</Link>.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function Header() {
   const path = usePathname();
   const [open, setOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const cart = useCart();
   const { user } = useAuth();
   const active = (href) => href === "/" ? path === "/" : path.startsWith(href);
@@ -24,6 +155,7 @@ export function Header() {
           </Link>
           <nav className="hidden md:flex items-center gap-8" style={{ fontFamily: HEAD, letterSpacing: ".08em" }}>
             {LINKS.map(([l, href]) => <Link key={href} href={href} className="text-[14px] hover:opacity-60" style={{ color: active(href) ? C.green : C.ink }}>{l}</Link>)}
+            <button onClick={() => setSearchOpen(true)} className="hover:opacity-60" aria-label="Search" title="Search"><Search size={18} /></button>
             <Link href={user ? "/account" : "/auth"} className="hover:opacity-60 flex items-center gap-1 text-[13px]" style={{ fontFamily: HEAD }}><User size={18} />{user ? user.name.split(" ")[0] : ""}</Link>
             <button onClick={() => cart.setOpen(true)} className="relative hover:opacity-60">
               <ShoppingBag size={19} />
@@ -32,6 +164,7 @@ export function Header() {
             <Link href="/admin" className="text-[12px] px-3 py-1.5 rounded-full" style={{ border: `1px solid ${C.line}`, color: active("/admin") ? C.green : C.gray }}>ADMIN</Link>
           </nav>
           <div className="flex items-center gap-4 md:hidden">
+            <button onClick={() => setSearchOpen(true)} aria-label="Search"><Search size={20} /></button>
             <button onClick={() => cart.setOpen(true)} className="relative"><ShoppingBag size={20} />
               {cart.count > 0 && <span className="absolute -top-2 -right-2 text-[10px] text-white rounded-full w-[16px] h-[16px] flex items-center justify-center" style={{ background: C.green }}>{cart.count}</span>}
             </button>
@@ -48,15 +181,17 @@ export function Header() {
           </div>
           <div className="flex-1 flex flex-col gap-2 p-6" style={{ fontFamily: HEAD, letterSpacing: ".08em" }}>
             {LINKS.map(([l, href]) => <Link key={href} href={href} onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>{l}</Link>)}
+            <button onClick={() => { setOpen(false); setSearchOpen(true); }} className="text-left text-[20px] py-3 flex items-center gap-2" style={{ borderBottom: `1px solid ${C.line}` }}><Search size={20} /> SEARCH</button>
             <Link href={user ? "/account" : "/auth"} onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>{user ? "MY ACCOUNT" : "SIGN IN / REGISTER"}</Link>
             <Link href="/admin" onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ color: C.green }}>ADMIN PANEL</Link>
           </div>
         </div>
       )}
+
+      <SiteSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   );
 }
-
 export function CartDrawer() {
   const cart = useCart();
   const { toast } = useToast();
@@ -111,7 +246,7 @@ export function CartDrawer() {
 export function Toaster() {
   const { toasts } = useToast();
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] flex flex-col gap-2 items-center">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] flex flex-col gap-2 items-center">
       {toasts.map((t) => (
         <div key={t.id} className="text-white text-[14px] px-5 py-3 rounded-full flex items-center gap-2 shadow-lg" style={{ background: C.ink, fontFamily: HEAD, letterSpacing: ".03em", animation: "dgin .25s ease" }}>
           <Check size={16} color={C.green} /> {t.msg}

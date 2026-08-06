@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, TrendingUp, CreditCard, Lock, Loader2 } from "lucide-react";
+import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, SCALE, ROOMS, CATEGORY_NAMES, rangeOf } from "@/lib/pricing";
 import { MOCK_PRODUCTS, MOCK_ORDERS, SALES } from "@/lib/mock";
@@ -90,7 +90,7 @@ function LiveAdminApp() {
         <div className="py-24 flex items-center justify-center gap-2 text-neutral-500 text-[14px]"><Loader2 size={16} className="animate-spin" /> Loading…</div>
       ) : (<>
         {view === "dashboard" && <LiveDash products={products} orders={orders} />}
-        {view === "products" && <LiveProducts products={products} onEdit={openEditor} onDeleted={reloadProducts} toast={toast} />}
+        {view === "products" && <LiveProducts products={products} categories={categories} onEdit={openEditor} onDeleted={reloadProducts} toast={toast} />}
         {view === "editor" && <LiveEditor editingId={editingId} categories={categories} toast={toast} onSaved={() => { reloadProducts(); setView("products"); }} />}
         {view === "orders" && <LiveOrders orders={orders} onChanged={reloadOrders} toast={toast} />}
         {view === "categories" && <LiveCategories categories={categories} onChanged={reloadCategories} toast={toast} />}
@@ -120,36 +120,113 @@ function LiveDash({ products, orders }) {
   );
 }
 
-function LiveProducts({ products, onEdit, onDeleted, toast }) {
+function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
+  const PAGE_SIZE = 20;
   const [busyId, setBusyId] = useState(null);
+  const [query, setQuery] = useState("");
+  const [cat, setCat] = useState("All");
+  const [page, setPage] = useState(1);
+
+  const categoryNames = categories.map((c) => c.name);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return products.filter((p) => {
+      if (cat !== "All" && p.category_name !== cat) return false;
+      if (!q) return true;
+      const hay = `${p.name || ""} ${p.category_name || ""} ${p.sku || ""} ${p.slug || ""}`.toLowerCase();
+      return q.split(/\s+/).every((w) => hay.includes(w));
+    });
+  }, [products, query, cat]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [query, cat]);
+  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
+
   const remove = async (p) => {
     if (!window.confirm(`Delete "${p.name}"? This can't be undone.`)) return;
     setBusyId(p.id);
     try { await db.deleteProduct(p.id); toast("Print deleted"); onDeleted(); } catch (e) { toast(friendlyError(e, "Delete failed")); } finally { setBusyId(null); }
   };
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-4"><span className="text-[14px] text-neutral-500">{products.length} prints</span><Pill size="sm" onClick={() => onEdit(null)}><Plus size={14} /> New print</Pill></div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <span className="text-[14px] text-neutral-500">
+          {filtered.length} of {products.length} prints
+          {pageCount > 1 ? ` · page ${safePage}/${pageCount}` : ""}
+        </span>
+        <Pill size="sm" onClick={() => onEdit(null)}><Plus size={14} /> New print</Pill>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-3 mb-5">
+        <div className="flex-1 flex items-center gap-2 px-3" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>
+          <Search size={15} color={C.gray} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, category, SKU…"
+            className="flex-1 py-2.5 text-[14px] outline-none bg-transparent"
+          />
+          {query && <button type="button" onClick={() => setQuery("")} className="text-[12px] text-neutral-500">Clear</button>}
+        </div>
+        <div className="relative min-w-[200px]">
+          <select
+            value={cat}
+            onChange={(e) => setCat(e.target.value)}
+            className="w-full appearance-none py-2.5 pl-3 pr-9 text-[14px] outline-none"
+            style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
+          >
+            <option value="All">All categories</option>
+            {categoryNames.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+          <ChevronDown size={15} className="absolute right-3 top-3.5 pointer-events-none text-neutral-400" />
+        </div>
+      </div>
+
       {products.length === 0 ? (
         <p className="text-[14px] text-neutral-500 py-8 text-center">No prints yet — add your first one.</p>
+      ) : pageItems.length === 0 ? (
+        <p className="text-[14px] text-neutral-500 py-8 text-center">No prints match your search or filter.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-[14px]" style={{ minWidth: 700 }}>
-            <thead><tr className="text-left text-neutral-500 text-[12px]" style={{ borderBottom: `1px solid ${C.line}` }}>{["", "NAME", "CATEGORY", "RATIO", "PRICE RANGE", "STATUS", ""].map((h, k) => <th key={k} className="py-3 font-normal">{h}</th>)}</tr></thead>
-            <tbody>{products.map((p) => (
-              <tr key={p.id} style={{ borderBottom: `1px solid ${C.line}` }}>
-                <td className="py-3"><Plate product={{ image: imageUrl(p.hero_image), colour: p.colour, name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }} showSig={false} style={{ width: 46, height: 46, borderRadius: 3 }} /></td>
-                <td style={{ fontFamily: HEAD }}>{p.name}</td><td className="text-neutral-600">{p.category_name}</td>
-                <td className="text-neutral-600">{RATIOS[p.ratio_id]?.label || p.ratio_id}</td>
-                <td>{p.min_cents ? `${zar(p.min_cents / 100)} – ${zar(p.max_cents / 100)}` : "No prices set"}</td>
-                <td><span className="text-[11px] px-2 py-1 rounded-full" style={{ background: p.is_published ? `${C.green}18` : "#f2f2f0", color: p.is_published ? C.green : C.gray, fontFamily: HEAD }}>{p.is_published ? "Published" : "Draft"}</span></td>
-                <td className="whitespace-nowrap">
-                  <button onClick={() => onEdit(p.id)} className="text-neutral-400 hover:text-black mr-3"><Pencil size={15} /></button>
-                  <button onClick={() => remove(p)} disabled={busyId === p.id} className="text-neutral-400 hover:text-red-500">{busyId === p.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}</button>
-                </td>
-              </tr>))}</tbody>
-          </table>
-        </div>
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[14px]" style={{ minWidth: 700 }}>
+              <thead><tr className="text-left text-neutral-500 text-[12px]" style={{ borderBottom: `1px solid ${C.line}` }}>{["", "NAME", "CATEGORY", "RATIO", "PRICE RANGE", "STATUS", ""].map((h, k) => <th key={k} className="py-3 font-normal">{h}</th>)}</tr></thead>
+              <tbody>{pageItems.map((p) => (
+                <tr key={p.id} style={{ borderBottom: `1px solid ${C.line}` }}>
+                  <td className="py-3"><Plate product={{ image: imageUrl(p.hero_image), colour: p.colour === "both" ? "colour" : p.colour, name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }} showSig={false} style={{ width: 46, height: 46, borderRadius: 3 }} /></td>
+                  <td style={{ fontFamily: HEAD }}>{p.name}</td><td className="text-neutral-600">{p.category_name}</td>
+                  <td className="text-neutral-600">{RATIOS[p.ratio_id]?.label || p.ratio_id}</td>
+                  <td>{p.min_cents ? `${zar(p.min_cents / 100)} – ${zar(p.max_cents / 100)}` : "No prices set"}</td>
+                  <td><span className="text-[11px] px-2 py-1 rounded-full" style={{ background: p.is_published ? `${C.green}18` : "#f2f2f0", color: p.is_published ? C.green : C.gray, fontFamily: HEAD }}>{p.is_published ? "Published" : "Draft"}</span></td>
+                  <td className="whitespace-nowrap">
+                    <button onClick={() => onEdit(p.id)} className="text-neutral-400 hover:text-black mr-3"><Pencil size={15} /></button>
+                    <button onClick={() => remove(p)} disabled={busyId === p.id} className="text-neutral-400 hover:text-red-500">{busyId === p.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}</button>
+                  </td>
+                </tr>))}</tbody>
+            </table>
+          </div>
+
+          {pageCount > 1 && (
+            <div className="flex items-center justify-center gap-3 mt-8">
+              <button type="button" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="flex items-center gap-1 text-[13px] px-3 py-2 rounded-full disabled:opacity-40" style={{ border: `1px solid ${C.line}`, fontFamily: HEAD }}>
+                <ChevronLeft size={15} /> Prev
+              </button>
+              <div className="flex flex-wrap justify-center gap-1">
+                {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+                  <button key={n} type="button" onClick={() => setPage(n)} className="w-9 h-9 rounded-full text-[13px]" style={{ background: n === safePage ? C.green : "transparent", color: n === safePage ? "#fff" : C.ink, border: `1px solid ${n === safePage ? C.green : C.line}`, fontFamily: HEAD }}>{n}</button>
+                ))}
+              </div>
+              <button type="button" disabled={safePage >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} className="flex items-center gap-1 text-[13px] px-3 py-2 rounded-full disabled:opacity-40" style={{ border: `1px solid ${C.line}`, fontFamily: HEAD }}>
+                Next <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -234,7 +311,7 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
   useEffect(() => {
     if (editingId) return;
     const es = {}; const pr = {};
-    RATIOS[ratio].sizes.forEach((s, idx) => { es[s] = idx < 2; PRICING[s].forEach((v, mi) => { pr[`${s}:${mi}`] = v; }); });
+    RATIOS[ratio].sizes.forEach((s) => { es[s] = true; PRICING[s].forEach((v, mi) => { pr[`${s}:${mi}`] = v; }); });
     setEnabledSizes(es); setPrices(pr);
   }, [ratio, editingId]);
 
@@ -270,7 +347,7 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
   }, [onSizes, onMats, prices]);
 
   const previewImage = file ? URL.createObjectURL(file) : imageUrl(existingImage);
-  const preview = { image: previewImage, grad: colour === "colour" ? ["#7c5f36", "#d9c39a"] : ["#333", "#9a9a97"], angle: 120, name: name || "New Print", colour, ratio };
+  const preview = { image: previewImage, grad: colour === "colour" || colour === "both" ? ["#7c5f36", "#d9c39a"] : ["#333", "#9a9a97"], angle: 120, name: name || "New Print", colour: colour === "both" ? "colour" : colour, ratio };
   const firstRoom = Object.keys(rooms).find((r) => rooms[r]) || "gallery";
 
   const save = async () => {
@@ -325,7 +402,8 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
             <div className="relative"><select value={ratio} onChange={(e) => setRatio(e.target.value)} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{Object.entries(RATIOS).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}</select><ChevronDown size={16} className="absolute right-3 top-3.5 pointer-events-none" /></div>
           </div>
           <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" rows={3} className="w-full py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
-          <div className="flex gap-4 mt-3">{[["bw", "Black & White"], ["colour", "Colour"]].map(([k, l]) => (<label key={k} className="flex items-center gap-2 text-[14px]"><input type="radio" checked={colour === k} onChange={() => setColour(k)} /> {l}</label>))}</div>
+          <div className="flex flex-wrap gap-4 mt-3">{[["bw", "Black & White"], ["colour", "Colour"], ["both", "Both"]].map(([k, l]) => (<label key={k} className="flex items-center gap-2 text-[14px]"><input type="radio" checked={colour === k} onChange={() => setColour(k)} /> {l}</label>))}</div>
+          {colour === "both" && <p className="text-[12px] text-neutral-500 mt-2">Shoppers can choose Black &amp; White or Colour — the same upload is shown with a B&amp;W filter when they pick mono.</p>}
         </div>
         <div>
           <h3 className="text-[15px] mb-1" style={{ fontFamily: HEAD }}>3 · Sizes &amp; finishes — set a price for each</h3>
@@ -462,7 +540,7 @@ function DemoOrders({ compact }) {
         <tbody>{MOCK_ORDERS.map((o) => (
           <tr key={o.id} style={{ borderBottom: `1px solid ${C.line}` }}>
             <td className="py-3" style={{ fontFamily: HEAD }}>{o.id}</td><td className="text-neutral-600">{o.date}</td>
-            <td className="text-neutral-600">{o.items}</td><td>{zar(o.total)}</td><td><StatusBadge s={o.status} /></td>
+            <td className="text-neutral-600">{o.itemsSummary || o.items}</td><td>{zar(o.total)}</td><td><StatusBadge s={o.status} /></td>
           </tr>))}</tbody>
       </table>
     </div>
@@ -493,7 +571,7 @@ function DemoEditor({ toast }) {
 
   useEffect(() => {
     const es = {}; const pr = {};
-    RATIOS[ratio].sizes.forEach((s, idx) => { es[s] = idx < 2; PRICING[s].forEach((v, mi) => { pr[`${s}:${mi}`] = v; }); });
+    RATIOS[ratio].sizes.forEach((s) => { es[s] = true; PRICING[s].forEach((v, mi) => { pr[`${s}:${mi}`] = v; }); });
     setEnabledSizes(es); setPrices(pr);
   }, [ratio]);
 
@@ -505,7 +583,7 @@ function DemoEditor({ toast }) {
     return vals.length ? [Math.min(...vals), Math.max(...vals)] : [0, 0];
   }, [onSizes, onMats, prices]);
 
-  const preview = { grad: colour === "colour" ? ["#7c5f36", "#d9c39a"] : ["#333", "#9a9a97"], angle: 120, name: name || "New Print", colour, ratio };
+  const preview = { grad: colour === "colour" || colour === "both" ? ["#7c5f36", "#d9c39a"] : ["#333", "#9a9a97"], angle: 120, name: name || "New Print", colour: colour === "both" ? "colour" : colour, ratio };
   const firstRoom = Object.keys(rooms).find((r) => rooms[r]) || "gallery";
 
   return (
@@ -526,7 +604,8 @@ function DemoEditor({ toast }) {
             <div className="relative"><select value={ratio} onChange={(e) => setRatio(e.target.value)} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{Object.entries(RATIOS).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}</select><ChevronDown size={16} className="absolute right-3 top-3.5 pointer-events-none" /></div>
           </div>
           <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" rows={3} className="w-full py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
-          <div className="flex gap-4 mt-3">{[["bw", "Black & White"], ["colour", "Colour"]].map(([k, l]) => (<label key={k} className="flex items-center gap-2 text-[14px]"><input type="radio" checked={colour === k} onChange={() => setColour(k)} /> {l}</label>))}</div>
+          <div className="flex flex-wrap gap-4 mt-3">{[["bw", "Black & White"], ["colour", "Colour"], ["both", "Both"]].map(([k, l]) => (<label key={k} className="flex items-center gap-2 text-[14px]"><input type="radio" checked={colour === k} onChange={() => setColour(k)} /> {l}</label>))}</div>
+          {colour === "both" && <p className="text-[12px] text-neutral-500 mt-2">Shoppers can choose Black &amp; White or Colour — the same upload is shown with a B&amp;W filter when they pick mono.</p>}
         </div>
         <div>
           <h3 className="text-[15px] mb-1" style={{ fontFamily: HEAD }}>3 · Sizes & finishes — set a price for each</h3>

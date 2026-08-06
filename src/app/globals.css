@@ -1,0 +1,24 @@
+@import url("https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Poppins:wght@300;400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --olive: #556b2f;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: "Poppins", "Nunito Sans", system-ui, sans-serif;
+  color: #1a1a1a;
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+* { box-sizing: border-box; }
+
+/* hide scrollbars on horizontal thumbnail strips */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@keyframes dgin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }

@@ -6,9 +6,16 @@ const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 export const hasSupabase = Boolean(url && anon);
 
 // Server-side read client (uses anon key; RLS applies). Used in server components.
+// Next.js 14 caches fetch() by default — force no-store so catalogue changes
+// (new imports, publishes) show up immediately instead of serving a stale Lion-only payload.
 export function serverClient() {
   if (!hasSupabase) return null;
-  return createClient(url, anon, { auth: { persistSession: false } });
+  return createClient(url, anon, {
+    auth: { persistSession: false },
+    global: {
+      fetch: (input, init = {}) => fetch(input, { ...init, cache: "no-store" }),
+    },
+  });
 }
 
 // Browser singleton (auth + client reads).

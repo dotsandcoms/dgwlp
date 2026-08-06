@@ -20,6 +20,21 @@ export function Card({ p }) {
   );
 }
 
+/** Home featured tile: category label + link into that collection on /shop. */
+function CollectionCard({ p }) {
+  const category = p.category || "Uncategorised";
+  const href = `/shop?category=${encodeURIComponent(category)}`;
+  return (
+    <div className="group text-center">
+      <Link href={href} className="block w-full overflow-hidden">
+        <Plate product={p} style={{ width: "100%", aspectRatio: "1/1", transition: "transform .6s" }} className="group-hover:scale-[1.05]" />
+      </Link>
+      <div className="mt-4 text-[16px]" style={{ fontFamily: HEAD }}>{category}</div>
+      <div className="mt-3"><Link href={href}><Pill variant="outline" size="sm">View collection</Pill></Link></div>
+    </div>
+  );
+}
+
 function Slideshow({ slides }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -56,8 +71,22 @@ function Slideshow({ slides }) {
   );
 }
 
+/** One featured print per category (first occurrence in the product list). */
+function onePerCategory(products) {
+  const seen = new Set();
+  const out = [];
+  for (const p of products) {
+    const key = p.category || "Uncategorised";
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
 export function Home({ products }) {
   const heroP = { image: siteImage("hero.jpg"), colour: "bw", name: "Wildebeest at Dawn" };
+  const featured = onePerCategory(products);
   const panels = [
     { image: siteImage("elephant-plains.jpg"), name: "Lone Bull", slug: "lone-bull", tag: "ELEPHANTS", cap: "A lone bull on the endless plains" },
     { image: siteImage("wildebeest-herd.jpg"), name: "Wildebeest Herd", slug: "wildebeest-herd", tag: "PLAINS GAME", cap: "The herd moves as one" },
@@ -90,11 +119,11 @@ export function Home({ products }) {
       <section className="max-w-[1240px] mx-auto px-5 py-20 text-center">
         <Reveal><h2 className="text-[30px] sm:text-[42px] mb-2" style={{ fontFamily: HEAD, color: C.green, letterSpacing: ".04em" }}>LATEST COLLECTION</h2></Reveal>
         <div className="flex justify-center mb-12"><Link href="/shop"><Pill variant="outline" size="sm">VIEW ALL</Pill></Link></div>
-        {products.length === 0 ? (
+        {featured.length === 0 ? (
           <p className="text-[14px] text-neutral-500">New prints are on their way — check back soon.</p>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
-            {products.slice(0, 4).map((p, i) => <Reveal key={p.id} delay={i * 90}><Card p={p} /></Reveal>)}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-12">
+            {featured.map((p, i) => <Reveal key={p.id} delay={i * 90}><CollectionCard p={p} /></Reveal>)}
           </div>
         )}
       </section>

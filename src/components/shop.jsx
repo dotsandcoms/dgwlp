@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Heart } from "lucide-react";
 import { C, HEAD } from "@/lib/pricing";
 import { Reveal } from "./primitives";
@@ -7,9 +8,21 @@ import { Card } from "./home";
 import { useToast } from "@/context/providers";
 
 export function ShopClient({ products, categories }) {
-  const [cat, setCat] = useState("All");
+  const searchParams = useSearchParams();
+  const initialCat = (() => {
+    const q = searchParams.get("category");
+    if (q && categories.includes(q)) return q;
+    return "All";
+  })();
+  const [cat, setCat] = useState(initialCat);
   const [wish, setWish] = useState([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const q = searchParams.get("category");
+    if (q && categories.includes(q)) setCat(q);
+  }, [searchParams, categories]);
+
   useEffect(() => { try { const s = localStorage.getItem("dg_wish"); if (s) setWish(JSON.parse(s)); } catch {} }, []);
   const toggle = (id) => setWish((w) => { const n = w.includes(id) ? w.filter((x) => x !== id) : [...w, id]; try { localStorage.setItem("dg_wish", JSON.stringify(n)); } catch {} toast(w.includes(id) ? "Removed from wishlist" : "Saved to wishlist"); return n; });
   const list = cat === "All" ? products : products.filter((p) => p.category === cat);

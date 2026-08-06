@@ -38,7 +38,7 @@ export async function saveDeliveryProfile(authUser, data) {
   const a = data?.address || {};
   const { error } = await sb.rpc("save_my_delivery", {
     p_full_name: data?.name || authUser.user_metadata?.full_name || null,
-    p_phone: data?.phone ?? authUser.user_metadata?.phone ?? null,
+    p_phone: data?.phone != null ? String(data.phone) : null,
     p_street: a.street || null,
     p_suburb: a.suburb || null,
     p_city: a.city || null,
@@ -51,28 +51,52 @@ export async function saveDeliveryProfile(authUser, data) {
   return { ok: true };
 }
 
-/** Load name, phone and default address for the signed-in user. */
-export async function fetchMyProfile(authUser) {
+function emptyProfile(authUser) {
   const fallbackName =
     authUser?.user_metadata?.full_name ||
     (authUser?.email || "").split("@")[0].replace(/\b\w/g, (c) => c.toUpperCase()) ||
     "";
+  return {
+    name: fallbackName,
+    email: authUser?.email || "",
+    phone: authUser?.user_metadata?.phone || "",
+    address: null,
+  };
+}
 
-  if (!authUser?.id) {
-    return { name: fallbackName, email: authUser?.email || "", phone: "", address: null };
-  }
+/** Load name, phone and default address for the signed-in user. */
+export async function fetchMyProfile(authUser) {
+  if (!authUser?.id) return emptyProfile(authUser);
 
   const sb = browserClient();
-  if (!sb) {
-    return {
-      name: fallbackName,
-      email: authUser.email,
-      phone: authUser.user_metadata?.phone || "",
-      address: null,
-    };
+  if (!sb) return emptyProfile(authUser);
+
+  // Prefer security-definer RPC — reliable after login
+  try {
+    const { data, error } = await sb.rpc("get_my_profile");
+    if (!error && data && typeof data === "object") {
+      const addr = data.address;
+      return {
+        name: data.full_name || emptyProfile(authUser).name,
+        email: authUser.email,
+        phone: data.phone || "",
+        address: addr && (addr.street || addr.city)
+          ? {
+              street: addr.street || "",
+              suburb: addr.suburb || "",
+              city: addr.city || "",
+              province: addr.province || "",
+              postal: addr.postal || "",
+              notes: addr.notes || "",
+            }
+          : null,
+      };
+    }
+  } catch {
+    // fall through to table reads
   }
 
-  const [{ data: profile }, { data: addresses }] = await Promise.all([
+  const [{ data: profile, error: pErr }, { data: addresses, error: aErr }] = await Promise.all([
     sb.from("profiles").select("full_name,phone").eq("id", authUser.id).maybeSingle(),
     sb.from("addresses")
       .select("street,suburb,city,province,postal_code,notes,is_default,created_at")
@@ -82,12 +106,14 @@ export async function fetchMyProfile(authUser) {
       .limit(1),
   ]);
 
+  if (pErr && aErr) return emptyProfile(authUser);
+
   const addr = Array.isArray(addresses) ? addresses[0] : addresses;
   return {
-    name: profile?.full_name || fallbackName,
+    name: profile?.full_name || emptyProfile(authUser).name,
     email: authUser.email,
     phone: profile?.phone || "",
-    address: addr
+    address: addr?.street
       ? {
           street: addr.street || "",
           suburb: addr.suburb || "",
@@ -106,27 +132,21 @@ export async function flushPendingProfile(authUser) {
   let pending = null;
   try { pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "null"); } catch {}
 
-  const data = pending || {
-    name: authUser.user_metadata?.full_name,
-    phone: authUser.user_metadata?.phone,
-    address: {
-      street: authUser.user_metadata?.street,
-      suburb: authUser.user_metadata?.suburb,
-      city: authUser.user_metadata?.city,
-      province: authUser.user_metadata?.province,
-      postal: authUser.user_metadata?.postal,
-      notes: authUser.user_metadata?.notes,
-    },
-  };
+  // Only flush explicitly stashed signup data — never overwrite DB with empty metadata
+  if (!pending) return;
 
-  const hasPhone = Boolean(data.phone);
-  const hasAddr = Boolean(data.address?.street && data.address?.city && (data.address?.postal || data.address?.postal_code));
-  if (!hasPhone && !hasAddr && !data.name) {
-    if (pending) localStorage.removeItem(PENDING_KEY);
+  const hasPhone = Boolean(pending.phone);
+  const hasAddr = Boolean(
+    pending.address?.street &&
+    pending.address?.city &&
+    (pending.address?.postal || pending.address?.postal_code)
+  );
+  if (!hasPhone && !hasAddr && !pending.name) {
+    localStorage.removeItem(PENDING_KEY);
     return;
   }
 
-  const result = await saveDeliveryProfile(authUser, data);
+  const result = await saveDeliveryProfile(authUser, pending);
   if (result.ok) {
     try { localStorage.removeItem(PENDING_KEY); } catch {}
   }

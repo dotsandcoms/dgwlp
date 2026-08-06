@@ -190,9 +190,27 @@ function AuthProvider({ children }) {
           },
         });
       } catch {}
-      const profile = await fetchMyProfile(authUser);
-      persist(profile);
-      return profile;
+      // Prefer freshly saved values so a slow/failed re-fetch can't blank the UI
+      const saved = {
+        name: data.name || "",
+        email: authUser.email || user?.email || "",
+        phone: data.phone || "",
+        address: data.address?.street ? data.address : null,
+      };
+      try {
+        const profile = await fetchMyProfile(authUser);
+        const merged = {
+          name: profile.name || saved.name,
+          email: profile.email || saved.email,
+          phone: profile.phone || saved.phone,
+          address: profile.address || saved.address,
+        };
+        persist(merged);
+        return merged;
+      } catch {
+        persist(saved);
+        return saved;
+      }
     }
     const next = {
       name: data.name,

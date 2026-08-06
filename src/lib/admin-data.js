@@ -13,9 +13,23 @@ export const slugify = (s) =>
 export async function checkIsAdmin() {
   const sb = browserClient();
   if (!sb) return false;
-  const { data, error } = await sb.rpc("is_admin");
-  if (error) return false;
-  return Boolean(data);
+
+  const { data: sess } = await sb.auth.getSession();
+  const uid = sess?.session?.user?.id;
+  if (!uid) return false;
+
+  // Prefer RPC (security definer) — works even with stricter RLS.
+  const { data: rpcData, error: rpcErr } = await sb.rpc("is_admin");
+  if (!rpcErr) return Boolean(rpcData);
+
+  // Fallback: own row on admins (requires admins_read allowing user_id = auth.uid())
+  const { data: row, error: rowErr } = await sb
+    .from("admins")
+    .select("user_id")
+    .eq("user_id", uid)
+    .maybeSingle();
+  if (rowErr) return false;
+  return Boolean(row?.user_id);
 }
 
 /* ------------------------------ categories --------------------------- */

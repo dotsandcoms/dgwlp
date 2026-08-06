@@ -17,8 +17,11 @@ export function middleware(req) {
   const slug = configured.replace(/^\//, "");
 
   if (customAdmin) {
+    // Hit the real not-found UI (not a plain-text 404)
     if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-      return new NextResponse("Not Found", { status: 404 });
+      const url = req.nextUrl.clone();
+      url.pathname = "/__out-of-frame__";
+      return NextResponse.rewrite(url);
     }
     if (pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)) {
       const url = req.nextUrl.clone();

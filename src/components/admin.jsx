@@ -10,6 +10,7 @@ import { friendlyError } from "@/lib/errors";
 import * as db from "@/lib/admin-data";
 import { Plate, Scene, artworkStyle, Pill, StatusBadge } from "./primitives";
 import { LiveSettings, DemoSettings } from "./admin-settings";
+import { NotFoundView } from "./not-found";
 import { useToast, useAuth, useAuthModal } from "@/context/providers";
 import { adminPath } from "@/lib/admin-path";
 
@@ -17,13 +18,7 @@ export function AdminApp() {
   // Never expose the demo admin console in production.
   if (hasSupabase) return <LiveAdminGate />;
   if (process.env.NODE_ENV === "production") {
-    return (
-      <div className="max-w-[520px] mx-auto px-5 py-24 text-center">
-        <Lock size={26} color={C.gray} className="mx-auto mb-4" />
-        <h1 className="text-[22px] mb-2" style={{ fontFamily: HEAD }}>Not found</h1>
-        <p className="text-[14px] text-neutral-600">This page is not available.</p>
-      </div>
-    );
+    return <NotFoundView />;
   }
   return <DemoAdminApp />;
 }

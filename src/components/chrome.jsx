@@ -8,17 +8,19 @@ import { Plate, Pill, Row } from "./primitives";
 import { useCart, useAuth, useToast, useAuthModal } from "@/context/providers";
 import { browserClient, hasSupabase, imageUrl } from "@/lib/supabase";
 import { MOCK_PRODUCTS } from "@/lib/mock";
+import { adminPath } from "@/lib/admin-path";
 
 const LINKS = [["HOME", "/"], ["ABOUT", "/about"], ["SHOP", "/shop"], ["CONTACT", "/contact"]];
 
 /** Person icon menu — Register / Sign in when logged out; account links when signed in. */
 function AccountMenu({ align = "right" }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin, adminReady } = useAuth();
   const { toast } = useToast();
   const { openAuth } = useAuthModal();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const showAdmin = Boolean(user && adminReady && isAdmin);
 
   useEffect(() => {
     if (!open) return;
@@ -82,6 +84,17 @@ function AccountMenu({ align = "right" }) {
               <button type="button" role="menuitem" onClick={() => go("/account")} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-neutral-50" style={{ fontFamily: HEAD }}>
                 My account
               </button>
+              {showAdmin && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => go(adminPath())}
+                  className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-neutral-50"
+                  style={{ fontFamily: HEAD, color: C.green }}
+                >
+                  Store console
+                </button>
+              )}
               <button type="button" role="menuitem" onClick={signOut} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-neutral-50 text-neutral-600" style={{ fontFamily: HEAD }}>
                 Sign out
               </button>
@@ -235,9 +248,10 @@ export function Header() {
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const cart = useCart();
-  const { user } = useAuth();
+  const { user, isAdmin, adminReady } = useAuth();
   const { openAuth } = useAuthModal();
   const active = (href) => href === "/" ? path === "/" : path.startsWith(href);
+  const showAdmin = Boolean(user && adminReady && isAdmin);
   return (
     <>
       <header className="sticky top-0 z-40" style={{ background: "rgba(255,255,255,.92)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${C.line}` }}>
@@ -275,7 +289,14 @@ export function Header() {
             {LINKS.map(([l, href]) => <Link key={href} href={href} onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>{l}</Link>)}
             <button onClick={() => { setOpen(false); setSearchOpen(true); }} className="text-left text-[20px] py-3 flex items-center gap-2" style={{ borderBottom: `1px solid ${C.line}` }}><Search size={20} /> SEARCH</button>
             {user ? (
-              <Link href="/account" onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>MY ACCOUNT</Link>
+              <>
+                <Link href="/account" onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>MY ACCOUNT</Link>
+                {showAdmin && (
+                  <Link href={adminPath()} onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}`, color: C.green }}>
+                    STORE CONSOLE
+                  </Link>
+                )}
+              </>
             ) : (
               <>
                 <button type="button" onClick={() => { setOpen(false); openAuth("register"); }} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>REGISTER</button>

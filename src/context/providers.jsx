@@ -77,15 +77,32 @@ function AuthProvider({ children }) {
     const syncAdmin = async (authUser) => {
       setSessionUser(authUser || null);
       setAdminReady(false);
-      if (authUser) {
-        await flushPendingProfile(authUser);
-        const profile = await fetchMyProfile(authUser);
-        persist(profile);
-      } else {
-        persist(null);
+      try {
+        if (authUser) {
+          // Don't let profile/address sync block admin detection (menu shortcut).
+          void flushPendingProfile(authUser);
+          try {
+            const profile = await fetchMyProfile(authUser);
+            if (!cancelled) persist(profile);
+          } catch {
+            if (!cancelled) {
+              persist({
+                name: authUser.user_metadata?.full_name || authUser.email?.split("@")[0] || "",
+                email: authUser.email || "",
+                phone: "",
+                address: null,
+              });
+            }
+          }
+          const admin = await checkIsAdmin();
+          if (!cancelled) setIsAdmin(admin);
+        } else {
+          persist(null);
+          if (!cancelled) setIsAdmin(false);
+        }
+      } finally {
+        if (!cancelled) setAdminReady(true);
       }
-      const admin = authUser ? await checkIsAdmin() : false;
-      if (!cancelled) { setIsAdmin(admin); setAdminReady(true); }
     };
 
     // Recover session from email-confirm hash (#access_token=…) if present

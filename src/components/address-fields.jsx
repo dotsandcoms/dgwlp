@@ -103,7 +103,7 @@ export function AddressFields({ value, onChange, showNotes = true, notesPlacehol
   }, [attach, detach]);
 
   return (
-    <div>
+    <div className="min-w-0 w-full max-w-full">
       <div className="text-[13px] tracking-[.1em] text-neutral-500 mb-2 flex items-center gap-2" style={{ fontFamily: HEAD }}>
         <MapPin size={14} /> DELIVERY ADDRESS
       </div>
@@ -120,7 +120,7 @@ export function AddressFields({ value, onChange, showNotes = true, notesPlacehol
         autoComplete="off"
         {...inp}
       />
-      <div className="grid sm:grid-cols-2 gap-3 my-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-3 min-w-0">
         <input placeholder="Suburb" value={f.suburb} onChange={set("suburb")} autoComplete="address-level3" {...inp} />
         <input placeholder="City" value={f.city} onChange={set("city")} autoComplete="address-level2" {...inp} />
         <div className="relative">

@@ -32,14 +32,14 @@ export function RegisterForm({ onDone, compact }) {
   };
 
   return (
-    <div>
+    <div className="min-w-0 w-full max-w-full">
       {!compact && (
         <div className="mb-5">
           <h3 className="text-[18px] mb-1" style={{ fontFamily: HEAD }}>Your details</h3>
           <p className="text-[13px] text-neutral-500">We’ll use these for orders and delivery updates.</p>
         </div>
       )}
-      <div className="grid sm:grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 min-w-0">
         <input placeholder="Full name" value={f.name} onChange={set("name")} autoComplete="name" {...inp} />
         <input placeholder="Email address" type="email" value={f.email} onChange={set("email")} autoComplete="email" {...inp} />
         <input placeholder="Password" type="password" value={f.pass} onChange={set("pass")} autoComplete="new-password" {...inp} />
@@ -69,11 +69,11 @@ export function LoginForm({ onDone }) {
   const [hp, setHp] = useState("");
   const ready = f.email && f.pass;
   return (
-    <div>
+    <div className="min-w-0 w-full max-w-full">
       <p className="text-[13px] text-neutral-500 mb-5">Enter the email and password for your collector account.</p>
-      <input placeholder="Email address" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} autoComplete="email" {...inp} />
+      <input placeholder="Email address" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} autoComplete="email" className={`${inp.className} max-w-full`} style={inp.style} />
       <div className="h-3" />
-      <input placeholder="Password" type="password" value={f.pass} onChange={(e) => setF({ ...f, pass: e.target.value })} autoComplete="current-password" {...inp} />
+      <input placeholder="Password" type="password" value={f.pass} onChange={(e) => setF({ ...f, pass: e.target.value })} autoComplete="current-password" className={`${inp.className} max-w-full`} style={inp.style} />
       <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", top: "auto", width: 1, height: 1, overflow: "hidden" }}>
         <label>Company<input tabIndex={-1} autoComplete="off" value={hp} onChange={(e) => setHp(e.target.value)} /></label>
       </div>

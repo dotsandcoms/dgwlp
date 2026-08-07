@@ -123,30 +123,30 @@ export function CheckoutFlow() {
   );
 
   return (
-    <div className="max-w-[1040px] mx-auto px-5 py-12">
-      <h1 className="text-[34px] mb-6" style={{ fontFamily: HEAD, fontWeight: 300 }}>CHECKOUT</h1>
-      <div className="flex items-center gap-2 mb-10">
+    <div className="max-w-[1040px] mx-auto px-4 sm:px-5 py-8 sm:py-12 overflow-x-clip w-full">
+      <h1 className="text-[28px] sm:text-[34px] mb-5 sm:mb-6" style={{ fontFamily: HEAD, fontWeight: 300 }}>CHECKOUT</h1>
+      <div className="flex items-center gap-2 mb-8 sm:mb-10 min-w-0">
         {steps.map((s, i) => {
           const n = i + 1, active = step === n, done = step > n;
           return (
             <React.Fragment key={s}>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px]" style={{ background: done ? C.green : active ? C.ink : "#fff", color: done || active ? "#fff" : C.gray, border: `1px solid ${done || active ? "transparent" : C.line}`, fontFamily: HEAD }}>{done ? <Check size={14} /> : n}</div>
-                <span className="text-[13px] hidden sm:inline" style={{ fontFamily: HEAD, color: active ? C.ink : C.gray }}>{s}</span>
+                <span className="text-[12px] sm:text-[13px] hidden sm:inline" style={{ fontFamily: HEAD, color: active ? C.ink : C.gray }}>{s}</span>
               </div>
-              {i < 2 && <div className="flex-1 h-px" style={{ background: C.line }} />}
+              {i < 2 && <div className="flex-1 h-px min-w-2" style={{ background: C.line }} />}
             </React.Fragment>
           );
         })}
       </div>
 
-      <div className="grid md:grid-cols-3 gap-10">
-        <div className="md:col-span-2">
+      <div className="grid md:grid-cols-3 gap-8 md:gap-10 min-w-0">
+        <div className="md:col-span-2 min-w-0 w-full">
           {step === 1 && (
-            <div>
-              <div className="flex gap-2 mb-6">
+            <div className="min-w-0 w-full">
+              <div className="flex flex-wrap gap-2 mb-6">
                 {[["register", "New customer"], ["login", "I have an account"]].map(([id, l]) => (
-                  <button key={id} onClick={() => setAuthTab(id)} className="text-[13px] px-4 py-2 rounded-full" style={{ background: authTab === id ? C.green : "transparent", color: authTab === id ? "#fff" : C.gray, border: `1px solid ${authTab === id ? C.green : C.line}`, fontFamily: HEAD }}>{l}</button>
+                  <button key={id} onClick={() => setAuthTab(id)} className="text-[12px] sm:text-[13px] px-3 sm:px-4 py-2 rounded-full" style={{ background: authTab === id ? C.green : "transparent", color: authTab === id ? "#fff" : C.gray, border: `1px solid ${authTab === id ? C.green : C.line}`, fontFamily: HEAD }}>{l}</button>
                 ))}
               </div>
               {authTab === "register"
@@ -203,22 +203,22 @@ export function CheckoutFlow() {
                   <button onClick={() => setStep(2)} className="text-[12px] mt-1" style={{ color: C.green }}>Edit</button>
                 </div>
               )}
-              <div className="flex items-center justify-between mt-6">
-                <button onClick={() => setStep(2)} className="text-[13px] text-neutral-500">← Delivery</button>
-                <Pill onClick={place}>Pay {zar(total)} with {pay === "payfast" ? "PayFast" : "Paystack"}</Pill>
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 mt-6">
+                <button onClick={() => setStep(2)} className="text-[13px] text-neutral-500 text-center sm:text-left">← Delivery</button>
+                <Pill onClick={place} style={{ width: "100%", maxWidth: 360 }}>Pay {zar(total)} with {pay === "payfast" ? "PayFast" : "Paystack"}</Pill>
               </div>
               <p className="text-[11px] text-neutral-500 mt-3 flex items-center gap-1"><ShieldCheck size={13} /> You'll be redirected to complete payment securely.</p>
             </div>
           )}
         </div>
 
-        <div className="h-fit p-6" style={{ background: C.greenSoft, borderRadius: 6 }}>
-          <h3 className="text-[16px] mb-4 tracking-[.08em]" style={{ fontFamily: HEAD }}>YOUR ORDER</h3>
+        <div className="h-fit p-4 sm:p-6 min-w-0 w-full" style={{ background: C.greenSoft, borderRadius: 6 }}>
+          <h3 className="text-[15px] sm:text-[16px] mb-4 tracking-[.08em]" style={{ fontFamily: HEAD }}>YOUR ORDER</h3>
           {cart.items.map((i) => (
-            <div key={i.key} className="flex gap-3 mb-3">
+            <div key={i.key} className="flex gap-3 mb-3 min-w-0">
               <Plate product={i.product} showSig={false} style={{ width: 46, height: 46, borderRadius: 3, flexShrink: 0 }} />
               <div className="flex-1 min-w-0"><div className="text-[13px] truncate" style={{ fontFamily: HEAD }}>{i.name} × {i.qty}</div><div className="text-[11px] text-neutral-500 truncate">{i.summary}</div></div>
-              <div className="text-[13px]">{zar(i.price * i.qty)}</div>
+              <div className="text-[13px] shrink-0">{zar(i.price * i.qty)}</div>
             </div>
           ))}
           <div className="my-3" style={{ borderTop: "1px solid #d6dcc9" }} />

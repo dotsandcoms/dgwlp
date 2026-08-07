@@ -56,28 +56,78 @@ function Slideshow({ slides }) {
     return () => clearInterval(t);
   }, [paused, slides.length]);
   const go = (n) => setI((n + slides.length) % slides.length);
-  const arrow = { position: "absolute", top: "50%", transform: "translateY(-50%)", zIndex: 10, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: C.green, color: "#fff", border: "none", cursor: "pointer" };
   return (
-    <section className="relative w-full overflow-hidden" style={{ height: "78vh", minHeight: 440, background: "#101010" }}
-      onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+    <section
+      className="relative w-full overflow-hidden"
+      style={{ height: "min(78vh, 720px)", minHeight: 420, background: "#101010" }}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
       {slides.map((s, k) => (
         <div key={k} className="absolute inset-0" style={{ opacity: k === i ? 1 : 0, transition: "opacity 1.1s ease", pointerEvents: k === i ? "auto" : "none" }}>
-          <div className="absolute inset-0" style={{ backgroundImage: `url(${s.image})`, backgroundSize: "cover", backgroundPosition: "center", filter: "grayscale(1) contrast(1.03)", transform: k === i ? "scale(1.06)" : "scale(1)", transition: "transform 7s ease" }} />
-          <div className="absolute inset-0" style={{ background: "linear-gradient(90deg,rgba(0,0,0,.6),rgba(0,0,0,.15) 55%,rgba(0,0,0,.5))" }} />
-          <div className="relative h-full max-w-[1240px] mx-auto px-8 sm:px-14 flex flex-col justify-center">
-            <p className="tracking-[.3em] text-[12px] sm:text-[13px] mb-3" style={{ fontFamily: HEAD, color: C.green }}>{s.tag}</p>
-            <h3 className="text-white text-[30px] sm:text-[52px] leading-[1.02] font-light mb-6" style={{ fontFamily: HEAD, maxWidth: 560 }}>{s.cap}</h3>
-            <div><Link href="/shop"><Pill>Explore the collection →</Pill></Link></div>
+          <div className="absolute inset-0" style={{ backgroundImage: `url(${s.image})`, backgroundSize: "cover", backgroundPosition: "center", filter: "grayscale(1) contrast(1.03)", transform: k === i ? "scale(1.04)" : "scale(1)", transition: "transform 7s ease" }} />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.25) 45%,rgba(0,0,0,.65) 100%)" }} />
+          <div className="relative h-full max-w-[1240px] mx-auto px-5 sm:px-14 flex flex-col justify-end sm:justify-center pb-24 sm:pb-0">
+            <p className="tracking-[.22em] sm:tracking-[.3em] text-[11px] sm:text-[13px] mb-2 sm:mb-3" style={{ fontFamily: HEAD, color: C.green }}>{s.tag}</p>
+            <h3 className="text-white text-[26px] sm:text-[52px] leading-[1.05] font-light mb-5 sm:mb-6 pr-2" style={{ fontFamily: HEAD, maxWidth: 560 }}>
+              {s.cap}
+            </h3>
+            <div className="w-full max-w-[280px] sm:max-w-none">
+              <Link href="/shop"><Pill style={{ width: "100%", maxWidth: 280 }}>Explore the collection →</Pill></Link>
+            </div>
           </div>
         </div>
       ))}
-      <button aria-label="Previous" onClick={() => go(i - 1)} style={{ ...arrow, left: 0 }}><ChevronLeft size={22} /></button>
-      <button aria-label="Next" onClick={() => go(i + 1)} style={{ ...arrow, right: 0 }}><ChevronRight size={22} /></button>
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex gap-2">
-        {slides.map((_, k) => (
-          <button key={k} aria-label={`Slide ${k + 1}`} onClick={() => setI(k)}
-            style={{ width: k === i ? 26 : 8, height: 8, borderRadius: 999, background: k === i ? C.green : "rgba(255,255,255,.65)", border: "none", cursor: "pointer", transition: "all .3s" }} />
-        ))}
+      {/* Desktop side arrows */}
+      <button
+        type="button"
+        aria-label="Previous"
+        onClick={() => go(i - 1)}
+        className="hidden sm:flex absolute top-1/2 -translate-y-1/2 left-0 z-10 w-11 h-11 items-center justify-center"
+        style={{ background: C.green, color: "#fff" }}
+      >
+        <ChevronLeft size={22} />
+      </button>
+      <button
+        type="button"
+        aria-label="Next"
+        onClick={() => go(i + 1)}
+        className="hidden sm:flex absolute top-1/2 -translate-y-1/2 right-0 z-10 w-11 h-11 items-center justify-center"
+        style={{ background: C.green, color: "#fff" }}
+      >
+        <ChevronRight size={22} />
+      </button>
+      {/* Mobile: arrows + dots sit below the copy */}
+      <div className="absolute bottom-5 left-0 right-0 z-10 flex items-center justify-center gap-4 px-5 sm:bottom-6">
+        <button
+          type="button"
+          aria-label="Previous"
+          onClick={() => go(i - 1)}
+          className="sm:hidden w-9 h-9 rounded-full flex items-center justify-center"
+          style={{ background: "rgba(255,255,255,.18)", color: "#fff", border: "1px solid rgba(255,255,255,.35)" }}
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <div className="flex gap-2">
+          {slides.map((_, k) => (
+            <button
+              key={k}
+              type="button"
+              aria-label={`Slide ${k + 1}`}
+              onClick={() => setI(k)}
+              style={{ width: k === i ? 26 : 8, height: 8, borderRadius: 999, background: k === i ? C.green : "rgba(255,255,255,.65)", border: "none", cursor: "pointer", transition: "all .3s" }}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          aria-label="Next"
+          onClick={() => go(i + 1)}
+          className="sm:hidden w-9 h-9 rounded-full flex items-center justify-center"
+          style={{ background: "rgba(255,255,255,.18)", color: "#fff", border: "1px solid rgba(255,255,255,.35)" }}
+        >
+          <ChevronRight size={18} />
+        </button>
       </div>
     </section>
   );
@@ -105,20 +155,38 @@ export function Home({ products }) {
   ];
 
   return (
-    <div>
-      <section className="relative overflow-hidden" style={{ height: "calc(100dvh - 68px)", minHeight: 520 }}>
-        <Parallax speed={0.3} className="absolute inset-0" style={{ top: "-12%", height: "124%" }}>
+    <div className="overflow-x-clip">
+      <section className="relative overflow-hidden" style={{ height: "calc(100dvh - 68px)", minHeight: 480 }}>
+        <Parallax speed={0.3} className="absolute inset-0 overflow-hidden" style={{ top: "-8%", height: "116%" }}>
           <Plate product={heroP} showSig={false} style={{ width: "100%", height: "100%" }} />
         </Parallax>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6" style={{ background: "linear-gradient(180deg,rgba(0,0,0,.12),rgba(0,0,0,.5))" }}>
-          <Reveal><p className="text-white/90 tracking-[.28em] text-[12px] sm:text-[15px] mb-4" style={{ fontFamily: HEAD }}>FOR THE LOVE OF WILDLIFE</p></Reveal>
-          <Reveal delay={120}><h1 className="text-white text-[42px] sm:text-[76px] leading-[.95] font-light" style={{ fontFamily: HEAD, letterSpacing: ".02em" }}>DORON<br />GOLDSTEIN</h1></Reveal>
-          <Reveal delay={240}><div className="flex items-center gap-4 my-6"><span style={{ width: 60, height: 1, background: C.green }} /><span className="text-[13px] sm:text-[17px] tracking-[.25em]" style={{ fontFamily: HEAD, color: C.green }}>WILDLIFE PHOTOGRAPHY</span><span style={{ width: 60, height: 1, background: C.green }} /></div></Reveal>
-          <Reveal delay={360}><Link href="/shop"><Pill>View the Collection →</Pill></Link></Reveal>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-5 sm:px-6" style={{ background: "linear-gradient(180deg,rgba(0,0,0,.12),rgba(0,0,0,.5))" }}>
+          <Reveal>
+            <p className="text-white/90 tracking-[.2em] sm:tracking-[.28em] text-[11px] sm:text-[15px] mb-3 sm:mb-4" style={{ fontFamily: HEAD }}>
+              FOR THE LOVE OF WILDLIFE
+            </p>
+          </Reveal>
+          <Reveal delay={120}>
+            <h1 className="text-white text-[36px] sm:text-[76px] leading-[.95] font-light" style={{ fontFamily: HEAD, letterSpacing: ".02em" }}>
+              DORON<br />GOLDSTEIN
+            </h1>
+          </Reveal>
+          <Reveal delay={240}>
+            <div className="flex items-center justify-center gap-2 sm:gap-4 my-5 sm:my-6 max-w-full px-1">
+              <span className="hidden sm:block shrink-0" style={{ width: 40, height: 1, background: C.green }} />
+              <span className="text-[11px] sm:text-[17px] tracking-[.12em] sm:tracking-[.25em]" style={{ fontFamily: HEAD, color: C.green }}>
+                WILDLIFE PHOTOGRAPHY
+              </span>
+              <span className="hidden sm:block shrink-0" style={{ width: 40, height: 1, background: C.green }} />
+            </div>
+          </Reveal>
+          <Reveal delay={360}>
+            <Link href="/shop"><Pill>View the Collection →</Pill></Link>
+          </Reveal>
         </div>
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 animate-bounce" style={{ pointerEvents: "none" }}>
-          <span className="text-white/80 text-[11px] tracking-[.25em]" style={{ fontFamily: HEAD }}>SCROLL</span>
-          <ChevronDown size={20} color="rgba(255,255,255,.8)" />
+        <div className="absolute bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 animate-bounce" style={{ pointerEvents: "none" }}>
+          <span className="text-white/80 text-[10px] sm:text-[11px] tracking-[.25em]" style={{ fontFamily: HEAD }}>SCROLL</span>
+          <ChevronDown size={18} color="rgba(255,255,255,.8)" />
         </div>
       </section>
 

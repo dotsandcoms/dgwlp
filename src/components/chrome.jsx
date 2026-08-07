@@ -74,7 +74,7 @@ function AccountMenu({ align = "right" }) {
       {open && (
         <div
           role="menu"
-          className="absolute top-full mt-2 min-w-[180px] py-1.5 bg-white shadow-lg z-50"
+          className="absolute top-full mt-2 min-w-[180px] py-1.5 bg-white shadow-lg z-[60]"
           style={{
             [align === "left" ? "left" : "right"]: 0,
             border: `1px solid ${C.line}`,
@@ -257,10 +257,10 @@ export function Header() {
   const showAdmin = Boolean(liveUser && adminReady && isAdmin);
   return (
     <>
-      <header className="sticky top-0 z-40" style={{ background: "rgba(255,255,255,.92)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${C.line}` }}>
-        <div className="w-full px-5 sm:px-8 h-[68px] flex items-center justify-between">
-          <Link href="/" style={{ fontFamily: HEAD, fontWeight: 500 }} className="text-[15px] sm:text-[20px] tracking-[.12em]">
-            <span style={{ color: C.ink }}>DORON GOLDSTEIN </span><span style={{ color: C.green }}>PHOTOGRAPHY</span>
+      <header className="sticky top-0 z-50" style={{ background: "rgba(255,255,255,.92)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${C.line}` }}>
+        <div className="w-full px-4 sm:px-8 h-[68px] flex items-center justify-between gap-3 min-w-0">
+          <Link href="/" style={{ fontFamily: HEAD, fontWeight: 500 }} className="text-[13px] sm:text-[20px] tracking-[.08em] sm:tracking-[.12em] min-w-0 leading-tight">
+            <span style={{ color: C.ink }}>DORON GOLDSTEIN </span><span className="whitespace-nowrap" style={{ color: C.green }}>PHOTOGRAPHY</span>
           </Link>
           <nav className="hidden md:flex items-center gap-8" style={{ fontFamily: HEAD, letterSpacing: ".08em" }}>
             {LINKS.map(([l, href]) => <Link key={href} href={href} className="text-[14px] hover:opacity-60" style={{ color: active(href) ? C.green : C.ink }}>{l}</Link>)}
@@ -271,13 +271,13 @@ export function Header() {
               {cart.count > 0 && <span className="absolute -top-2 -right-2 text-[10px] text-white rounded-full w-[17px] h-[17px] flex items-center justify-center" style={{ background: C.green }}>{cart.count}</span>}
             </button>
           </nav>
-          <div className="flex items-center gap-4 md:hidden">
+          <div className="flex items-center gap-3 sm:gap-4 md:hidden shrink-0">
             <AccountMenu />
             <button onClick={() => setSearchOpen(true)} aria-label="Search"><Search size={20} /></button>
             <button onClick={() => cart.setOpen(true)} className="relative"><ShoppingBag size={20} />
               {cart.count > 0 && <span className="absolute -top-2 -right-2 text-[10px] text-white rounded-full w-[16px] h-[16px] flex items-center justify-center" style={{ background: C.green }}>{cart.count}</span>}
             </button>
-            <button onClick={() => setOpen(true)}><Menu size={22} /></button>
+            <button onClick={() => setOpen(true)} aria-label="Menu"><Menu size={22} /></button>
           </div>
         </div>
       </header>

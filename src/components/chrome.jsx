@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, ShoppingBag, User, Minus, Plus, Trash2, Check, ShieldCheck, Mail, Search } from "lucide-react";
+import { Menu, X, ShoppingBag, User, Minus, Plus, Trash2, Check, ShieldCheck, Search } from "lucide-react";
 import { C, HEAD, zar } from "@/lib/pricing";
 import { Plate, Pill, Row } from "./primitives";
 import { useCart, useAuth, useToast, useAuthModal } from "@/context/providers";
@@ -379,18 +379,12 @@ export function Toaster() {
 }
 
 export function Footer() {
-  const { toast } = useToast();
-  const [email, setEmail] = useState("");
   return (
     <footer style={{ background: C.dark, color: "#cfcfcb" }}>
       <div className="max-w-[1240px] mx-auto px-5 py-14 grid gap-10 md:grid-cols-4">
         <div className="md:col-span-2">
           <div style={{ fontFamily: HEAD }} className="tracking-[.12em] text-white text-[16px] mb-3">DORON GOLDSTEIN <span style={{ color: C.green }}>PHOTOGRAPHY</span></div>
           <p className="text-[13px] leading-relaxed opacity-80 max-w-sm">For the love of wildlife. Signed, limited-edition fine-art photographs — printed on archival paper and canvas, and shipped across South Africa.</p>
-          <div className="flex gap-2 mt-5 max-w-sm">
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email for new releases" className="flex-1 py-2.5 px-3 text-[13px] outline-none rounded" style={{ background: "#242320", border: "1px solid #333", color: "#fff" }} />
-            <Pill size="sm" onClick={() => { setEmail(""); toast("You're on the list ✦"); }}>Join</Pill>
-          </div>
         </div>
         <div className="text-[13px]">
           <div style={{ fontFamily: HEAD }} className="tracking-[.14em] text-white mb-3 text-[12px]">EXPLORE</div>
@@ -398,8 +392,7 @@ export function Footer() {
         </div>
         <div className="text-[13px]">
           <div style={{ fontFamily: HEAD }} className="tracking-[.14em] text-white mb-3 text-[12px]">SECURE CHECKOUT</div>
-          <div className="flex items-center gap-2 opacity-80 mb-2"><ShieldCheck size={15} /> PayFast · Paystack</div>
-          <div className="flex items-center gap-2 opacity-80"><Mail size={15} /> Receipts via Resend</div>
+          <div className="flex items-center gap-2 opacity-80"><ShieldCheck size={15} /> PayFast · Paystack</div>
         </div>
       </div>
       <div className="text-center text-[11px] py-5 opacity-50 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3" style={{ borderTop: "1px solid #333" }}>

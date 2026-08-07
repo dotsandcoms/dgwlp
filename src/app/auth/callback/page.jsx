@@ -53,9 +53,12 @@ export default function AuthCallbackPage() {
         await flushPendingProfile(data.session.user);
         window.history.replaceState({}, "", "/auth/callback");
 
+        const nextRaw = qs.get("next") || "/account";
+        const next = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/account";
+
         if (!cancelled) {
           setMsg("You're in — redirecting…");
-          router.replace("/account");
+          router.replace(next);
         }
       } catch (e) {
         if (!cancelled) {

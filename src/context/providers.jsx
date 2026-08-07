@@ -1,6 +1,6 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { browserClient, hasSupabase } from "@/lib/supabase";
+import { browserClient, hasSupabase, authCallbackUrl } from "@/lib/supabase";
 import { checkIsAdmin } from "@/lib/admin-data";
 import { stashPendingProfile, flushPendingProfile, signupMeta, saveDeliveryProfile, fetchMyProfile } from "@/lib/auth-profile";
 
@@ -145,14 +145,15 @@ function AuthProvider({ children }) {
   const register = async (data) => {
     if (hasSupabase) {
       const sb = browserClient();
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
       const { data: auth, error } = await sb.auth.signUp({
         email: data.email,
         password: data.pass || Math.random().toString(36),
         options: {
           // Trigger handle_new_user() reads these into profiles + addresses
           data: signupMeta(data),
-          emailRedirectTo: origin ? `${origin}/auth/callback` : undefined,
+          // Must match an allowlisted Redirect URL in Supabase Auth settings.
+          // Uses the current domain (prod vs local) — never hardcode localhost.
+          emailRedirectTo: authCallbackUrl("/account"),
         },
       });
       if (error) throw error;

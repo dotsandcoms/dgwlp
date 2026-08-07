@@ -68,7 +68,15 @@ just the filename (e.g. `lion.jpg`) — the app builds the public URL automatica
 
 1. https://vercel.com → **New Project** → import `dotsandcoms/dgwlp`.
 2. Add the same environment variables (from `.env.local`) in Vercel’s settings.
+   Set **`NEXT_PUBLIC_SITE_URL=https://dgwlp.vercel.app`** (or your custom domain) — not localhost.
 3. Deploy, then point `photography.dotsandcoms.co.za` at the Vercel project.
-4. In Supabase → Authentication → URL config, add your production URL.
+4. **Supabase → Authentication → URL Configuration** (required for confirm-email links):
+   - **Site URL:** `https://dgwlp.vercel.app` (or your custom domain) — this is the fallback host
+   - **Redirect URLs** (add all that apply):
+     - `https://dgwlp.vercel.app/auth/callback`
+     - `https://dgwlp.vercel.app/**`
+     - `http://localhost:3000/auth/callback`
+     - `http://localhost:3000/**`
+   If Site URL stays on localhost, confirmation emails always open localhost even when you signed up on production.
 5. Set PayFast/Paystack notify URLs to `https://your-domain/api/payfast/notify`
    and `/api/paystack/webhook`.

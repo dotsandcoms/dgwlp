@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { X, Minus, Plus, Truck, ShieldCheck, Heart } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { X, Minus, Plus, Truck, ShieldCheck, Heart, ArrowLeft } from "lucide-react";
 import { C, HEAD, zar, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, minPriceForSize, availableSizesOf, availableMaterialsFor } from "@/lib/pricing";
 import { freeShippingLabel, DEFAULT_SETTINGS } from "@/lib/settings";
 import { Plate, Scene, RoomPreview, Dropdown, Pill } from "./primitives";
@@ -9,6 +11,7 @@ import { useCart, useToast } from "@/context/providers";
 const COLOUR_LABEL = { bw: "Black & White", colour: "Colour" };
 
 export function ProductDetail({ product }) {
+  const router = useRouter();
   const cart = useCart();
   const { toast } = useToast();
   const sizes = availableSizesOf(product);
@@ -52,6 +55,18 @@ export function ProductDetail({ product }) {
     mat.framed ? FRAME_COLOURS.find((f) => f.id === frameCol)?.label + " frame" : null,
   ].filter(Boolean).join(" · ");
 
+  const shopHref = product.category
+    ? `/shop?category=${encodeURIComponent(product.category)}`
+    : "/shop";
+
+  const goBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push(shopHref);
+  };
+
   const toggleWish = () => { try { const s = JSON.parse(localStorage.getItem("dg_wish") || "[]"); const n = s.includes(product.id) ? s.filter((x) => x !== product.id) : [...s, product.id]; localStorage.setItem("dg_wish", JSON.stringify(n)); setWish(n.includes(product.id)); toast(n.includes(product.id) ? "Saved to wishlist" : "Removed from wishlist"); } catch {} };
 
   const addToCart = () => {
@@ -77,14 +92,36 @@ export function ProductDetail({ product }) {
       <div className="max-w-[600px] mx-auto px-5 py-24 text-center">
         <h2 className="text-[26px] mb-3" style={{ fontFamily: HEAD, fontWeight: 300 }}>{product.name}</h2>
         <p className="text-[14px] text-neutral-500">This print isn't currently available for order — check back soon.</p>
+        <button
+          type="button"
+          onClick={goBack}
+          className="mt-6 inline-flex items-center gap-2 text-[13px] hover:opacity-70"
+          style={{ fontFamily: HEAD, color: C.green }}
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
       </div>
     );
   }
 
   return (
     <div className="max-w-[1240px] mx-auto px-5 py-8">
-      <div className="text-[13px] text-neutral-500 mb-6" style={{ fontFamily: HEAD, letterSpacing: ".03em" }}>
-        Home / {product.category} / <span style={{ color: C.ink }}>{product.name}</span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6">
+        <button
+          type="button"
+          onClick={goBack}
+          className="inline-flex items-center gap-1.5 text-[13px] hover:opacity-70"
+          style={{ fontFamily: HEAD, color: C.green }}
+        >
+          <ArrowLeft size={15} /> Back
+        </button>
+        <div className="text-[13px] text-neutral-500" style={{ fontFamily: HEAD, letterSpacing: ".03em" }}>
+          <Link href="/" className="hover:opacity-70">Home</Link>
+          {" / "}
+          <Link href={shopHref} className="hover:opacity-70">{product.category || "Shop"}</Link>
+          {" / "}
+          <span style={{ color: C.ink }}>{product.name}</span>
+        </div>
       </div>
       <div className="grid md:grid-cols-2 gap-10">
         <div>

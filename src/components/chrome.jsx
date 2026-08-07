@@ -368,10 +368,10 @@ export function CartDrawer() {
 export function Toaster() {
   const { toasts } = useToast();
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] flex flex-col gap-2 items-center">
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[80] flex flex-col gap-2 items-center px-4 w-full max-w-lg pointer-events-none">
       {toasts.map((t) => (
-        <div key={t.id} className="text-white text-[14px] px-5 py-3 rounded-full flex items-center gap-2 shadow-lg" style={{ background: C.ink, fontFamily: HEAD, letterSpacing: ".03em", animation: "dgin .25s ease" }}>
-          <Check size={16} color={C.green} /> {t.msg}
+        <div key={t.id} className="pointer-events-auto text-white text-[14px] px-5 py-3 rounded-full flex items-center gap-2 shadow-lg max-w-full" style={{ background: C.ink, fontFamily: HEAD, letterSpacing: ".03em", animation: "dgin .25s ease" }}>
+          <Check size={16} color={C.green} className="shrink-0" /> <span className="truncate">{t.msg}</span>
         </div>
       ))}
     </div>

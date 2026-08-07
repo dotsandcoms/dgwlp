@@ -23,6 +23,30 @@ const anon = (
 
 export const hasSupabase = Boolean(url && anon);
 
+/**
+ * Absolute site origin for auth redirects (confirm email, OAuth, etc.).
+ * Prefer the browser origin so local vs production follows the domain in use;
+ * fall back to NEXT_PUBLIC_SITE_URL / Vercel URL on the server.
+ */
+export function getAppOrigin() {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin.replace(/\/$/, "");
+  }
+  const fromEnv = (process.env.NEXT_PUBLIC_SITE_URL || "").trim().replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+  const vercel = (process.env.VERCEL_URL || "").trim().replace(/\/$/, "");
+  if (vercel) return vercel.startsWith("http") ? vercel : `https://${vercel}`;
+  return "";
+}
+
+/** Email confirm / magic-link return URL (must be allowlisted in Supabase Auth). */
+export function authCallbackUrl(next = "/account") {
+  const origin = getAppOrigin();
+  if (!origin) return undefined;
+  const safe = typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : "/account";
+  return `${origin}/auth/callback?next=${encodeURIComponent(safe)}`;
+}
+
 // Server-side read client (uses anon key; RLS applies). Used in server components.
 // Next.js 14 caches fetch() by default — force no-store so catalogue changes
 // (new imports, publishes) show up immediately instead of serving a stale Lion-only payload.

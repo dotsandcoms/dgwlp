@@ -1,4 +1,5 @@
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "@/context/providers";
 import { Header, Footer, CartDrawer, Toaster } from "@/components/chrome";
 import { AuthModal } from "@/components/auth-modal";
@@ -24,6 +25,7 @@ export default function RootLayout({ children }) {
           <AuthModal />
           <Toaster />
         </Providers>
+        <Analytics />
       </body>
     </html>
   );

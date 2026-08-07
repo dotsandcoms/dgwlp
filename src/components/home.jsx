@@ -68,7 +68,12 @@ function Slideshow({ slides }) {
           <div className="absolute inset-0" style={{ backgroundImage: `url(${s.image})`, backgroundSize: "cover", backgroundPosition: "center", filter: "grayscale(1) contrast(1.03)", transform: k === i ? "scale(1.04)" : "scale(1)", transition: "transform 7s ease" }} />
           <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.25) 45%,rgba(0,0,0,.65) 100%)" }} />
           <div className="relative h-full max-w-[1240px] mx-auto px-5 sm:px-14 flex flex-col justify-end sm:justify-center pb-24 sm:pb-0">
-            <p className="tracking-[.22em] sm:tracking-[.3em] text-[11px] sm:text-[13px] mb-2 sm:mb-3" style={{ fontFamily: HEAD, color: C.green }}>{s.tag}</p>
+            <p
+              className="tracking-[.22em] sm:tracking-[.3em] text-[11px] sm:text-[13px] mb-2 sm:mb-3 text-white/90"
+              style={{ fontFamily: HEAD, textShadow: "0 1px 12px rgba(0,0,0,.55)" }}
+            >
+              {s.tag}
+            </p>
             <h3 className="text-white text-[26px] sm:text-[52px] leading-[1.05] font-light mb-5 sm:mb-6 pr-2" style={{ fontFamily: HEAD, maxWidth: 560 }}>
               {s.cap}
             </h3>

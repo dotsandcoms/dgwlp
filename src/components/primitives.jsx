@@ -163,15 +163,7 @@ export function RoomPreview({ product, size, material, frameCol, room, onZoom, p
   const place = artPlacement(size, room, product.ratio);
   return (
     <div style={{ position: "relative", width: "100%", aspectRatio: "4/3", overflow: "hidden", borderRadius: 4, border: `1px solid ${C.line}`, background: "#e8e4dc" }}>
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          transform: `scale(${place.roomScale})`,
-          transformOrigin: "50% 100%",
-          transition: "transform .45s cubic-bezier(.2,.7,.2,1)",
-        }}
-      >
+      <div style={{ position: "absolute", inset: 0 }}>
         <Scene room={room} />
       </div>
       <button onClick={onZoom} title="Zoom" style={{ position: "absolute", top: 12, right: 12, zIndex: 5, width: 40, height: 40, borderRadius: "50%", background: "#fff", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,.15)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -206,7 +198,8 @@ export function RoomPreview({ product, size, material, frameCol, room, onZoom, p
           borderRadius: 4,
         }}
       >
-        Shown to scale · {place.printW} × {place.printH} mm
+        {place.capped ? "Large format · " : "Shown to scale · "}
+        {place.printW} × {place.printH} mm
       </div>
     </div>
   );

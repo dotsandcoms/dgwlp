@@ -79,8 +79,8 @@ export function printDimsMm(sizeId, ratioKey) {
 
 /**
  * Width % + vertical centre for RoomPreview, derived from real mm vs room wall.
- * Large prints keep true size differences by zooming the room back (smaller furniture)
- * so the artwork still fits the hangable wall.
+ * The room stays fixed — large prints grow until they hit the hangable-wall cap
+ * so furniture never shrinks / “zooms out”.
  */
 export function artPlacement(sizeId, roomId, ratioKey) {
   const room = ROOM_VIEW[roomId] || ROOM_VIEW.lounge;
@@ -88,20 +88,18 @@ export function artPlacement(sizeId, roomId, ratioKey) {
   const trueWidthPct = (printW / room.wallMm) * 100;
   const trueHeightPct = trueWidthPct * (printH / printW) * (4 / 3);
 
-  // Screen size that fits the hang zone
+  // Cap to the hang zone; never scale the room back.
   const fit = Math.min(1, room.maxW / trueWidthPct, room.hangMaxH / trueHeightPct);
   const widthPct = Math.max(12, trueWidthPct * fit);
-
-  // Zoom room back when we had to shrink — furniture gets smaller, print looks larger vs the room
-  const roomScale = fit < 1 ? Math.max(0.58, fit) : 1;
 
   return {
     widthPct,
     topPct: room.artY,
     leftPct: 50,
-    roomScale,
+    roomScale: 1,
     printW,
     printH,
+    capped: fit < 1,
   };
 }
 

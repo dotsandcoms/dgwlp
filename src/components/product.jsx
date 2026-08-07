@@ -95,8 +95,7 @@ export function ProductDetail({ product }) {
         <button
           type="button"
           onClick={goBack}
-          className="mt-6 inline-flex items-center gap-2 text-[13px] hover:opacity-70"
-          style={{ fontFamily: HEAD, color: C.green }}
+          className="font-head mt-6 inline-flex items-center gap-2 text-[13px] text-olive hover:opacity-70"
         >
           <ArrowLeft size={16} /> Back
         </button>
@@ -110,17 +109,16 @@ export function ProductDetail({ product }) {
         <button
           type="button"
           onClick={goBack}
-          className="inline-flex items-center gap-1.5 text-[13px] hover:opacity-70"
-          style={{ fontFamily: HEAD, color: C.green }}
+          className="font-head inline-flex items-center gap-1.5 text-[13px] text-olive hover:opacity-70"
         >
           <ArrowLeft size={15} /> Back
         </button>
-        <div className="text-[13px] text-neutral-500" style={{ fontFamily: HEAD, letterSpacing: ".03em" }}>
+        <div className="font-head text-[13px] text-neutral-500 tracking-[0.03em]">
           <Link href="/" className="hover:opacity-70">Home</Link>
           {" / "}
           <Link href={shopHref} className="hover:opacity-70">{product.category || "Shop"}</Link>
           {" / "}
-          <span style={{ color: C.ink }}>{product.name}</span>
+          <span className="text-ink">{product.name}</span>
         </div>
       </div>
       <div className="grid md:grid-cols-2 gap-10">

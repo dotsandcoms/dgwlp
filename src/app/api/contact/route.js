@@ -39,7 +39,7 @@ export async function POST(req) {
 
     const key = process.env.RESEND_API_KEY;
     const from = process.env.EMAIL_FROM || "Doron Goldstein Photography <onboarding@resend.dev>";
-    const to = process.env.CONTACT_TO || from.match(/<([^>]+)>/)?.[1] || "orders@dotsandcoms.co.za";
+    const to = process.env.CONTACT_TO || from.match(/<([^>]+)>/)?.[1] || "orders@dgwlp.co.za";
 
     if (!key) {
       // Demo mode — accept without sending

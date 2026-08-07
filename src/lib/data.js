@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import { serverClient, hasSupabase, imageUrl } from "./supabase";
 import { MOCK_PRODUCTS, MOCK_CATEGORIES } from "./mock";
 
@@ -83,4 +84,43 @@ export async function getCategories() {
   } catch {
     return MOCK_CATEGORIES;
   }
+}
+
+const FEATURED_MAX = 6;
+
+/** Read featured ids — service role when available (anon RLS may hide this key). */
+async function fetchFeaturedIdsServer() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (url && serviceKey) {
+    const sb = createClient(url, serviceKey, { auth: { persistSession: false } });
+    const { data } = await sb.from("site_settings").select("value").eq("key", "featured").maybeSingle();
+    return Array.isArray(data?.value?.productIds) ? data.value.productIds.filter(Boolean) : [];
+  }
+  const sb = serverClient();
+  if (!sb) return [];
+  const { data } = await sb.from("site_settings").select("value").eq("key", "featured").maybeSingle();
+  return Array.isArray(data?.value?.productIds) ? data.value.productIds.filter(Boolean) : [];
+}
+
+/** Ordered featured prints for the home page (falls back to newest). */
+export async function getFeaturedProducts(allProducts) {
+  const catalogue = Array.isArray(allProducts) ? allProducts : await getProducts();
+  if (!catalogue.length) return [];
+
+  let ids = [];
+  if (hasSupabase) {
+    try {
+      ids = await fetchFeaturedIdsServer();
+    } catch {
+      ids = [];
+    }
+  }
+
+  if (!ids.length) return catalogue.slice(0, FEATURED_MAX);
+
+  const byId = new Map(catalogue.map((p) => [p.id, p]));
+  const picked = ids.map((id) => byId.get(id)).filter(Boolean);
+  if (picked.length) return picked.slice(0, FEATURED_MAX);
+  return catalogue.slice(0, FEATURED_MAX);
 }

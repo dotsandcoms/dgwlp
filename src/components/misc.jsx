@@ -269,7 +269,7 @@ export function Contact() {
             <Reveal delay={200}>
               <div className="space-y-6">
                 {[
-                  { label: "Email", value: "orders@dotsandcoms.co.za", href: "mailto:orders@dotsandcoms.co.za" },
+                  { label: "Email", value: "orders@dgwlp.co.za", href: "mailto:orders@dgwlp.co.za" },
                   { label: "Studio", value: "Johannesburg, South Africa" },
                   { label: "Orders", value: "Archival paper & canvas · shipped nationwide" },
                 ].map((item) => (

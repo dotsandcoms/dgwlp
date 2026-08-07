@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings } from "lucide-react";
+import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings, Star } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, ROOMS, CATEGORY_NAMES, rangeOf, artPlacement } from "@/lib/pricing";
 import { MOCK_PRODUCTS, MOCK_ORDERS, SALES } from "@/lib/mock";
@@ -10,6 +10,7 @@ import { friendlyError } from "@/lib/errors";
 import * as db from "@/lib/admin-data";
 import { Plate, Scene, artworkStyle, Pill, StatusBadge } from "./primitives";
 import { LiveSettings, DemoSettings } from "./admin-settings";
+import { LiveFeatured, DemoFeatured } from "./admin-featured";
 import { NotFoundView } from "./not-found";
 import { useToast, useAuth, useAuthModal } from "@/context/providers";
 import { adminPath } from "@/lib/admin-path";
@@ -96,7 +97,7 @@ function LiveAdminApp() {
       .finally(() => setLoading(false));
   }, [toast]);
 
-  const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["categories", "Categories", Tag], ["settings", "Settings", Settings]];
+  const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["featured", "Featured", Star], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["categories", "Categories", Tag], ["settings", "Settings", Settings]];
   const openEditor = (id = null) => { setEditingId(id); setView("editor"); };
 
   return (
@@ -116,6 +117,7 @@ function LiveAdminApp() {
       ) : (<>
         {view === "dashboard" && <LiveDash products={products} orders={orders} />}
         {view === "products" && <LiveProducts products={products} categories={categories} onEdit={openEditor} onDeleted={reloadProducts} toast={toast} />}
+        {view === "featured" && <LiveFeatured products={products} toast={toast} />}
         {view === "editor" && <LiveEditor editingId={editingId} categories={categories} toast={toast} onSaved={() => { reloadProducts(); setView("products"); }} />}
         {view === "orders" && <LiveOrders orders={orders} onChanged={reloadOrders} toast={toast} />}
         {view === "categories" && <LiveCategories categories={categories} onChanged={reloadCategories} toast={toast} />}
@@ -496,7 +498,7 @@ function DemoAdminApp() {
   const router = useRouter();
   const { toast } = useToast();
   const [view, setView] = useState("dashboard");
-  const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["categories", "Categories", Tag], ["settings", "Settings", Settings]];
+  const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["featured", "Featured", Star], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["categories", "Categories", Tag], ["settings", "Settings", Settings]];
   return (
     <div className="max-w-[1240px] mx-auto px-5 py-8">
       <div className="mb-4 p-3 rounded text-[12px]" style={{ background: C.greenSoft, color: C.greenDark }}>Demo admin — running on sample data. Connect Supabase to manage real products & orders.</div>
@@ -511,6 +513,7 @@ function DemoAdminApp() {
       </div>
       {view === "dashboard" && <DemoDash />}
       {view === "products" && <DemoProducts onEdit={() => setView("editor")} />}
+      {view === "featured" && <DemoFeatured toast={toast} />}
       {view === "editor" && <DemoEditor toast={toast} />}
       {view === "orders" && <DemoOrders />}
       {view === "categories" && <DemoCategories toast={toast} />}

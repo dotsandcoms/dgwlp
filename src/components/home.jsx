@@ -150,9 +150,23 @@ function onePerCategory(products) {
   return out;
 }
 
-export function Home({ products }) {
+const TRUST_LINES = [
+  "Signed, limited-edition prints",
+  "Archival paper & canvas",
+  "Shipped nationwide",
+];
+
+const HOW_STEPS = [
+  { n: "01", title: "Choose your print", body: "Browse the collection and find the frame that belongs on your wall." },
+  { n: "02", title: "Size & finish", body: "Select paper or canvas, framing, and colour or black & white where offered." },
+  { n: "03", title: "Delivered to you", body: "Archival production and careful packing — couriered across South Africa." },
+];
+
+export function Home({ products, featured = [] }) {
   const heroP = { image: siteImage("hero.jpg"), colour: "bw", name: "Wildebeest at Dawn" };
-  const featured = onePerCategory(products);
+  const aboutP = { image: siteImage("about.jpg"), colour: "colour", name: "Doron Goldstein", grad: ["#2f2f2d", "#a9a49b"], angle: 120 };
+  const categories = onePerCategory(products);
+  const featuredPrints = (featured?.length ? featured : products.slice(0, 6)).slice(0, 6);
   const panels = [
     { image: siteImage("elephant-plains.jpg"), name: "Lone Bull", slug: "lone-bull", tag: "ELEPHANTS", cap: "A lone bull on the endless plains" },
     { image: siteImage("wildebeest-herd.jpg"), name: "Wildebeest Herd", slug: "wildebeest-herd", tag: "PLAINS GAME", cap: "The herd moves as one" },
@@ -215,17 +229,170 @@ export function Home({ products }) {
             </Reveal>
           </div>
 
-          {featured.length === 0 ? (
+          {categories.length === 0 ? (
             <p className="text-[14px] text-neutral-500 text-center py-8">New prints are on their way — check back soon.</p>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
-              {featured.map((p, i) => <CollectionPanel key={p.id} p={p} delay={i * 70} />)}
+              {categories.map((p, i) => <CollectionPanel key={p.id} p={p} delay={i * 70} />)}
             </div>
           )}
         </div>
       </section>
 
+      {/* Trust band — between categories and featured */}
+      <section style={{ background: C.dark, color: "#cfcfcb" }}>
+        <div className="max-w-[1240px] mx-auto px-5 py-8 sm:py-10">
+          <Reveal>
+            <ul className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-center gap-5 sm:gap-x-12 sm:gap-y-3 text-center">
+              {TRUST_LINES.map((line) => (
+                <li key={line} className="text-[12px] sm:text-[13px] tracking-[.14em] uppercase flex items-center justify-center gap-3" style={{ fontFamily: HEAD }}>
+                  <span className="hidden sm:block shrink-0" style={{ width: 18, height: 1, background: C.green }} />
+                  <span className="text-white/85">{line}</span>
+                  <span className="hidden sm:block shrink-0" style={{ width: 18, height: 1, background: C.green }} />
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Featured prints */}
+      {featuredPrints.length > 0 && (
+        <section className="bg-white">
+          <div className="max-w-[1240px] mx-auto px-5 py-14 sm:py-20">
+            <div className="flex flex-wrap items-end justify-between gap-3 mb-8 sm:mb-10">
+              <Reveal>
+                <div>
+                  <p className="text-[11px] tracking-[.22em] mb-1.5" style={{ fontFamily: HEAD, color: C.green }}>NEW & FEATURED</p>
+                  <h2 className="text-[26px] sm:text-[34px] leading-none" style={{ fontFamily: HEAD, fontWeight: 300 }}>Prints to start with</h2>
+                </div>
+              </Reveal>
+              <Reveal delay={60}>
+                <Link href="/shop"><Pill variant="outline" size="sm">SHOP ALL</Pill></Link>
+              </Reveal>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-10 sm:gap-x-8 sm:gap-y-12">
+              {featuredPrints.map((p, i) => (
+                <Reveal key={p.id} delay={i * 50}>
+                  <Card p={p} />
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       <Slideshow slides={panels} />
+
+      {/* How it works */}
+      <section style={{ background: `linear-gradient(180deg, #fff 0%, #f7f5f0 100%)` }}>
+        <div className="max-w-[1100px] mx-auto px-5 py-16 sm:py-24">
+          <Reveal>
+            <p className="text-[11px] tracking-[.22em] mb-1.5 text-center" style={{ fontFamily: HEAD, color: C.green }}>FROM BUSH TO WALL</p>
+          </Reveal>
+          <Reveal delay={60}>
+            <h2 className="text-[26px] sm:text-[34px] leading-none text-center mb-10 sm:mb-14" style={{ fontFamily: HEAD, fontWeight: 300 }}>
+              How it works
+            </h2>
+          </Reveal>
+          <div className="grid md:grid-cols-3 gap-10 md:gap-8">
+            {HOW_STEPS.map((step, i) => (
+              <Reveal key={step.n} delay={80 + i * 80}>
+                <div className="text-center md:text-left">
+                  <div className="text-[12px] tracking-[.2em] mb-3" style={{ fontFamily: HEAD, color: C.green }}>{step.n}</div>
+                  <h3 className="text-[20px] sm:text-[22px] mb-3" style={{ fontFamily: HEAD, fontWeight: 400 }}>{step.title}</h3>
+                  <p className="text-[14px] sm:text-[15px] leading-relaxed text-neutral-600">{step.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* About teaser */}
+      <section className="relative overflow-hidden" style={{ background: C.dark }}>
+        <div className="max-w-[1240px] mx-auto grid md:grid-cols-2 min-h-[480px]">
+          <div className="relative min-h-[320px] md:min-h-0 order-1 md:order-none">
+            <Parallax speed={0.18} className="absolute inset-0" style={{ top: "-8%", height: "116%" }}>
+              <Plate product={aboutP} showSig={false} style={{ width: "100%", height: "100%" }} />
+            </Parallax>
+            <div className="absolute inset-0 md:hidden" style={{ background: "linear-gradient(180deg,transparent 40%,rgba(20,20,18,.85))" }} />
+          </div>
+          <div className="relative flex flex-col justify-center px-5 py-14 sm:px-12 sm:py-20 text-white order-2">
+            <Reveal>
+              <p className="text-[11px] tracking-[.22em] mb-3" style={{ fontFamily: HEAD, color: C.green }}>THE PHOTOGRAPHER</p>
+            </Reveal>
+            <Reveal delay={80}>
+              <h2 className="text-[28px] sm:text-[36px] leading-tight mb-5 font-light" style={{ fontFamily: HEAD }}>
+                A life behind the lens
+              </h2>
+            </Reveal>
+            <Reveal delay={140}>
+              <p className="text-[15px] sm:text-[16px] leading-relaxed text-white/75 mb-8 max-w-md">
+                After decades as a dentist, Doron turned a lifelong love of the African bush into signed, limited-edition wildlife photographs — patience and precision, reframed.
+              </p>
+            </Reveal>
+            <Reveal delay={200}>
+              <Link href="/about"><Pill variant="outline" style={{ color: "#fff", borderColor: "rgba(255,255,255,.45)" }}>Read Doron’s story →</Pill></Link>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
+      {/* Light break between dark about + commission bands */}
+      <section style={{ background: `linear-gradient(180deg, #f7f5f0 0%, #ebe8e1 100%)` }}>
+        <div className="max-w-[720px] mx-auto px-5 py-14 sm:py-16 text-center">
+          <Reveal>
+            <div className="flex items-center justify-center gap-4 mb-5">
+              <span className="hidden sm:block shrink-0" style={{ width: 40, height: 1, background: C.green }} />
+              <p className="text-[11px] tracking-[.22em]" style={{ fontFamily: HEAD, color: C.green }}>FOR THE LOVE OF WILDLIFE</p>
+              <span className="hidden sm:block shrink-0" style={{ width: 40, height: 1, background: C.green }} />
+            </div>
+          </Reveal>
+          <Reveal delay={80}>
+            <p className="text-[18px] sm:text-[22px] leading-relaxed text-neutral-700" style={{ fontFamily: HEAD, fontWeight: 300 }}>
+              Every print is produced to archival standards — made to hold its place on your wall for years to come.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Contact / commission CTA */}
+      <section className="relative overflow-hidden" style={{ minHeight: 360 }}>
+        <Parallax speed={0.22} className="absolute inset-0" style={{ top: "-12%", height: "124%" }}>
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `url(${siteImage("contact2.jpg")})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              filter: "grayscale(1) contrast(1.04)",
+            }}
+          />
+        </Parallax>
+        <div className="absolute inset-0" style={{ background: "rgba(20,20,18,.7)" }} />
+        <div className="relative max-w-[640px] mx-auto px-5 py-20 sm:py-24 text-center text-white">
+          <Reveal>
+            <p className="text-[11px] tracking-[.22em] mb-3" style={{ fontFamily: HEAD, color: C.green }}>CUSTOM & COMMISSION</p>
+          </Reveal>
+          <Reveal delay={80}>
+            <h2 className="text-[28px] sm:text-[36px] mb-4 font-light" style={{ fontFamily: HEAD }}>
+              Need a custom size?
+            </h2>
+          </Reveal>
+          <Reveal delay={140}>
+            <p className="text-[15px] text-white/75 mb-8 max-w-md mx-auto">
+              Ask about larger formats, framing advice, or a commission — Doron and the team are happy to help.
+            </p>
+          </Reveal>
+          <Reveal delay={200}>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Link href="/contact"><Pill>Get in touch →</Pill></Link>
+              <Link href="/shop"><Pill variant="outline" style={{ color: "#fff", borderColor: "rgba(255,255,255,.45)" }}>Browse prints</Pill></Link>
+            </div>
+          </Reveal>
+        </div>
+      </section>
     </div>
   );
 }

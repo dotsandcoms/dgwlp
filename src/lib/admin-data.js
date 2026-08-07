@@ -199,6 +199,49 @@ export async function saveSettings(next, { previous } = {}) {
   return merged;
 }
 
+const FEATURED_KEY = "featured";
+const FEATURED_MAX = 6;
+
+/** Ordered product ids shown in the home “New & Featured” strip. */
+export async function fetchFeaturedIds() {
+  const sb = browserClient();
+  if (!sb) {
+    try {
+      const raw = localStorage.getItem("dg_featured_ids");
+      if (raw) {
+        const ids = JSON.parse(raw);
+        return Array.isArray(ids) ? ids.filter(Boolean).slice(0, FEATURED_MAX) : [];
+      }
+    } catch {}
+    return [];
+  }
+  const { data, error } = await sb.from("site_settings").select("value").eq("key", FEATURED_KEY).maybeSingle();
+  if (error) throw error;
+  const ids = data?.value?.productIds;
+  return Array.isArray(ids) ? ids.filter(Boolean).slice(0, FEATURED_MAX) : [];
+}
+
+export async function saveFeaturedIds(productIds = []) {
+  const ids = (Array.isArray(productIds) ? productIds : [])
+    .filter(Boolean)
+    .map(String)
+    .slice(0, FEATURED_MAX);
+
+  const sb = browserClient();
+  if (!sb) {
+    try { localStorage.setItem("dg_featured_ids", JSON.stringify(ids)); } catch {}
+    return ids;
+  }
+  const { error } = await sb.from("site_settings").upsert(
+    { key: FEATURED_KEY, value: { productIds: ids }, updated_at: new Date().toISOString() },
+    { onConflict: "key" },
+  );
+  if (error) throw error;
+  return ids;
+}
+
+export { FEATURED_MAX };
+
 /** Public shipping + tax only (uses anon RLS). */
 export async function fetchPublicSettings() {
   const sb = browserClient();

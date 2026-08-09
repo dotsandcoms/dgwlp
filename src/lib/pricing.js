@@ -57,10 +57,11 @@ export const ROOMS = [
  * maxW = hard cap so art never swallows the furniture.
  */
 export const ROOM_VIEW = {
-  lounge:  { wallMm: 3000, hangTop: 14, hangMaxH: 46, maxW: 58, artY: 38 },
-  bedroom: { wallMm: 2800, hangTop: 12, hangMaxH: 48, maxW: 56, artY: 36 },
-  study:   { wallMm: 2400, hangTop: 10, hangMaxH: 50, maxW: 54, artY: 34 },
-  gallery: { wallMm: 3800, hangTop: 10, hangMaxH: 72, maxW: 72, artY: 46 },
+  // artY tuned to the empty wall centre in the photoreal room photos
+  lounge:  { wallMm: 3000, hangTop: 12, hangMaxH: 44, maxW: 52, artY: 34 },
+  bedroom: { wallMm: 2800, hangTop: 10, hangMaxH: 42, maxW: 50, artY: 32 },
+  study:   { wallMm: 2400, hangTop: 8, hangMaxH: 44, maxW: 48, artY: 30 },
+  gallery: { wallMm: 3800, hangTop: 12, hangMaxH: 62, maxW: 58, artY: 40 },
 };
 
 /** Print edge lengths in mm for the hung orientation of a size + ratio. */

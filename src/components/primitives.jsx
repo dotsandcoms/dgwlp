@@ -2,6 +2,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import { C, HEAD, BODY, RATIOS, FRAME_COLOURS, artPlacement } from "@/lib/pricing";
+import { siteImage } from "@/lib/supabase";
+
+const ROOM_PHOTOS = {
+  lounge: "room-lounge.jpg",
+  bedroom: "room-bedroom.jpg",
+  study: "room-study.jpg",
+  gallery: "room-gallery.jpg",
+};
 
 export function Plate({ product, className, style, showSig = true, printColour }) {
   // printColour ('bw' | 'colour') overrides product.colour — used when product offers both.
@@ -26,124 +34,23 @@ export function Plate({ product, className, style, showSig = true, printColour }
 }
 const sigStyle = { position: "absolute", top: "6%", left: "6%", fontFamily: "'Segoe Script',cursive", fontStyle: "italic", fontSize: 11, color: "rgba(255,255,255,.6)" };
 
-/** Soft grain overlay for walls / floors. */
-function Grain({ opacity = 0.04 }) {
+/**
+ * Photorealistic room backdrop. Artwork is overlaid by RoomPreview using the
+ * same artPlacement math — these photos leave a clear center wall for the print.
+ */
+export function Scene({ room }) {
+  const file = ROOM_PHOTOS[room] || ROOM_PHOTOS.lounge;
   return (
     <div
       aria-hidden
       style={{
         position: "absolute",
         inset: 0,
-        opacity,
-        pointerEvents: "none",
-        backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-        backgroundSize: "140px 140px",
-        mixBlendMode: "multiply",
+        backgroundImage: `url(${siteImage(file)})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
       }}
     />
-  );
-}
-
-/** Lifelike room backdrop — depth, lighting, and furniture scaled to a ~3m wall. */
-export function Scene({ room }) {
-  const floorWood = {
-    background: `
-      linear-gradient(90deg, rgba(0,0,0,.04) 0 1px, transparent 1px),
-      linear-gradient(180deg, #c4b49a 0%, #b8a68a 40%, #a99578 100%)
-    `,
-    backgroundSize: "7% 100%, 100% 100%",
-  };
-
-  if (room === "gallery") {
-    return (
-      <>
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,#f3f1ec 0%,#e8e5df 55%,#ddd9d1 100%)" }} />
-        <Grain opacity={0.035} />
-        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 30%,rgba(255,255,255,.45),transparent 55%)" }} />
-        <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "12%", ...floorWood, boxShadow: "inset 0 8px 18px rgba(0,0,0,.08)" }} />
-        <div style={{ position: "absolute", left: "8%", right: "8%", bottom: "11.5%", height: 3, background: "rgba(0,0,0,.06)", borderRadius: 2 }} />
-      </>
-    );
-  }
-
-  if (room === "bedroom") {
-    return (
-      <>
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(165deg,#ebe6dc 0%,#e4dfd4 45%,#d9d3c6 100%)" }} />
-        <Grain />
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg,rgba(255,255,255,.2),transparent 35%,transparent 70%,rgba(0,0,0,.04))" }} />
-        <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "18%", ...floorWood }} />
-        {/* Headboard + bed */}
-        <div style={{ position: "absolute", left: "10%", right: "10%", bottom: "14%", height: "28%", background: "linear-gradient(180deg,#d2ccc0,#c5beaf)", borderRadius: "10px 10px 4px 4px", boxShadow: "0 10px 28px rgba(0,0,0,.12)" }} />
-        <div style={{ position: "absolute", left: "10%", right: "10%", bottom: "36%", height: "11%", background: "linear-gradient(180deg,#b7b0a0,#a89f8e)", borderRadius: "8px 8px 0 0", boxShadow: "0 -2px 10px rgba(0,0,0,.06)" }} />
-        <div style={{ position: "absolute", left: "16%", bottom: "30%", width: "24%", height: "10%", background: "linear-gradient(180deg,#f4f1ea,#ebe6dc)", borderRadius: 10, boxShadow: "0 4px 10px rgba(0,0,0,.08)", transform: "rotate(-1.5deg)" }} />
-        <div style={{ position: "absolute", right: "16%", bottom: "30%", width: "24%", height: "10%", background: "linear-gradient(180deg,#f4f1ea,#ebe6dc)", borderRadius: 10, boxShadow: "0 4px 10px rgba(0,0,0,.08)", transform: "rotate(1.5deg)" }} />
-        {/* Side table + lamp glow */}
-        <div style={{ position: "absolute", left: "4%", bottom: "18%", width: "8%", height: "9%", background: "#8a7460", borderRadius: 3, boxShadow: "0 6px 14px rgba(0,0,0,.15)" }} />
-        <div style={{ position: "absolute", left: "6.2%", bottom: "27%", width: "3.5%", height: "14%", background: "#6e5d4d", borderRadius: 2 }} />
-        <div style={{ position: "absolute", left: "4.5%", bottom: "40%", width: "7%", height: "5%", background: "rgba(255,236,200,.55)", borderRadius: "50%", filter: "blur(6px)" }} />
-      </>
-    );
-  }
-
-  if (room === "study") {
-    return (
-      <>
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,#e7e2d8 0%,#ddd6ca 100%)" }} />
-        <Grain />
-        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 70% 20%,rgba(255,248,230,.35),transparent 50%)" }} />
-        <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "16%", ...floorWood }} />
-        {/* Desk */}
-        <div style={{ position: "absolute", left: "16%", right: "16%", bottom: "14%", height: "4.5%", background: "linear-gradient(180deg,#8b7355,#6f5a42)", borderRadius: 3, boxShadow: "0 8px 18px rgba(0,0,0,.18)" }} />
-        <div style={{ position: "absolute", left: "18%", bottom: 0, width: "2.5%", height: "14.5%", background: "#5c4a36" }} />
-        <div style={{ position: "absolute", right: "18%", bottom: 0, width: "2.5%", height: "14.5%", background: "#5c4a36" }} />
-        {/* Chair */}
-        <div style={{ position: "absolute", left: "42%", bottom: "16%", width: "16%", height: "20%", background: "linear-gradient(180deg,#3a3a38,#2c2c2a)", borderRadius: "10px 10px 4px 4px", boxShadow: "0 8px 16px rgba(0,0,0,.2)" }} />
-        <div style={{ position: "absolute", left: "45%", bottom: "14%", width: "10%", height: "4%", background: "#2a2a28", borderRadius: 2 }} />
-        {/* Books on desk */}
-        <div style={{ position: "absolute", left: "22%", bottom: "18.5%", width: "8%", height: "2.2%", background: "#556B2F", borderRadius: 1 }} />
-        <div style={{ position: "absolute", left: "23%", bottom: "20.5%", width: "6%", height: "1.8%", background: "#7a6548", borderRadius: 1 }} />
-      </>
-    );
-  }
-
-  // Lounge (default)
-  return (
-    <>
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(165deg,#f0ebe3 0%,#e6e0d6 42%,#dcd5c9 100%)" }} />
-      <Grain />
-      {/* Window light wash */}
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(105deg,rgba(255,255,255,.28) 0%,transparent 32%,transparent 68%,rgba(0,0,0,.05) 100%)" }} />
-      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "24%", ...floorWood, boxShadow: "inset 0 12px 24px rgba(0,0,0,.06)" }} />
-      {/* Sofa shadow */}
-      <div style={{ position: "absolute", left: "14%", right: "14%", bottom: "5%", height: "8%", background: "rgba(0,0,0,.12)", borderRadius: "50%", filter: "blur(10px)" }} />
-      {/* Sofa body */}
-      <div style={{
-        position: "absolute", left: "15%", right: "15%", bottom: "7%", height: "19%",
-        background: "linear-gradient(180deg,#ddd8cf 0%,#cfc9be 55%,#bfb8ab 100%)",
-        borderRadius: "18px 18px 8px 8px",
-        boxShadow: "0 14px 32px rgba(0,0,0,.14)",
-      }} />
-      {/* Sofa back */}
-      <div style={{
-        position: "absolute", left: "15%", right: "15%", bottom: "20%", height: "10%",
-        background: "linear-gradient(180deg,#d4cfc6,#c4bdb0)",
-        borderRadius: "14px 14px 0 0",
-      }} />
-      {/* Cushions */}
-      <div style={{ position: "absolute", left: "19%", bottom: "16%", width: "17%", height: "9%", background: "linear-gradient(160deg,#ccc6bb,#bdb6a9)", borderRadius: 10, boxShadow: "0 3px 8px rgba(0,0,0,.1)" }} />
-      <div style={{ position: "absolute", right: "19%", bottom: "16%", width: "17%", height: "9%", background: "linear-gradient(200deg,#ccc6bb,#bdb6a9)", borderRadius: 10, boxShadow: "0 3px 8px rgba(0,0,0,.1)" }} />
-      {/* Plant */}
-      <div style={{ position: "absolute", left: "4%", bottom: "24%", width: "10%", height: "28%" }}>
-        <div style={{ position: "absolute", bottom: 0, left: "28%", width: "44%", height: "22%", background: "linear-gradient(180deg,#e8e2d8,#d4cdc2)", borderRadius: "2px 2px 4px 4px", boxShadow: "0 4px 10px rgba(0,0,0,.12)" }} />
-        <div style={{ position: "absolute", bottom: "18%", left: "8%", right: "8%", height: "78%", background: "radial-gradient(ellipse at 50% 60%,#6a8240 0%,#4a5e2c 70%)", borderRadius: "46% 54% 40% 40%", boxShadow: "inset -6px -8px 16px rgba(0,0,0,.15)" }} />
-        <div style={{ position: "absolute", bottom: "40%", left: "0%", width: "42%", height: "38%", background: "radial-gradient(ellipse,#62803c,#456028)", borderRadius: "50%", opacity: .9 }} />
-      </div>
-      {/* Floor lamp */}
-      <div style={{ position: "absolute", right: "6.5%", bottom: "24%", width: "1.4%", height: "36%", background: "linear-gradient(90deg,#7a7a76,#9a9a96,#7a7a76)", borderRadius: 2, boxShadow: "1px 0 4px rgba(0,0,0,.1)" }} />
-      <div style={{ position: "absolute", right: "3.8%", bottom: "58%", width: "7%", height: "7%", background: "linear-gradient(180deg,#cfcbc3,#a8a49c)", borderRadius: "50% 50% 8px 8px", boxShadow: "0 6px 14px rgba(0,0,0,.15)" }} />
-      <div style={{ position: "absolute", right: "2%", bottom: "52%", width: "11%", height: "14%", background: "radial-gradient(ellipse,rgba(255,236,200,.4),transparent 70%)", filter: "blur(4px)" }} />
-    </>
   );
 }
 

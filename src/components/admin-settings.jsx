@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { Loader2, Save, Truck, Percent, CreditCard } from "lucide-react";
+import { Loader2, Save, Truck, Percent, CreditCard, DollarSign } from "lucide-react";
 import { C, HEAD } from "@/lib/pricing";
 import { DEFAULT_SETTINGS, mergeSettings } from "@/lib/settings";
 import { friendlyError } from "@/lib/errors";
@@ -40,7 +40,7 @@ function Field({ label, hint, children }) {
 }
 
 /**
- * Admin Settings — shipping, VAT, PayFast credentials.
+ * Admin Settings — shipping, VAT, currency display, PayFast credentials.
  */
 export function LiveSettings({ toast }) {
   const [loading, setLoading] = useState(true);
@@ -48,6 +48,7 @@ export function LiveSettings({ toast }) {
   const [baseline, setBaseline] = useState(mergeSettings());
   const [shipping, setShipping] = useState(DEFAULT_SETTINGS.shipping);
   const [tax, setTax] = useState(DEFAULT_SETTINGS.tax);
+  const [currency, setCurrency] = useState(DEFAULT_SETTINGS.currency);
   const [payfast, setPayfast] = useState({
     merchantId: "",
     merchantKey: "",
@@ -65,6 +66,7 @@ export function LiveSettings({ toast }) {
         setBaseline(s);
         setShipping(s.shipping);
         setTax(s.tax);
+        setCurrency(s.currency);
         setPayfast({
           merchantId: s.payfast.merchantId || "",
           merchantKey: "",
@@ -86,13 +88,23 @@ export function LiveSettings({ toast }) {
         shipping: {
           standardPrice: Math.max(0, Number(shipping.standardPrice) || 0),
           expressPrice: Math.max(0, Number(shipping.expressPrice) || 0),
-          freeOver: Math.max(0, Number(shipping.freeOver) || 0),
-          allFree: Boolean(shipping.allFree),
+          freeOver: Math.max(0, Number(shipping.standardPrice) || 0) === 0
+            ? 0
+            : Math.max(0, Number(shipping.freeOver) || 0),
+          allFree: false,
+          internationalQuote: true,
+          internationalUnframedOnly: Boolean(shipping.internationalUnframedOnly),
+          internationalNote: (shipping.internationalNote || DEFAULT_SETTINGS.shipping.internationalNote).trim()
+            || DEFAULT_SETTINGS.shipping.internationalNote,
         },
         tax: {
           enabled: Boolean(tax.enabled),
           ratePct: Math.max(0, Math.min(100, Number(tax.ratePct) || 0)),
           label: (tax.label || "VAT").trim() || "VAT",
+        },
+        currency: {
+          showUsd: Boolean(currency.showUsd),
+          zarPerUsd: Math.max(0.01, Number(currency.zarPerUsd) || DEFAULT_SETTINGS.currency.zarPerUsd),
         },
         payfast: {
           merchantId: (payfast.merchantId || "").trim(),
@@ -103,6 +115,8 @@ export function LiveSettings({ toast }) {
       };
       const saved = await db.saveSettings(next, { previous: baseline });
       setBaseline(saved);
+      setShipping(saved.shipping);
+      setCurrency(saved.currency);
       setPayfast({
         merchantId: saved.payfast.merchantId || "",
         merchantKey: "",
@@ -135,7 +149,7 @@ export function LiveSettings({ toast }) {
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
           <h1 className="text-[28px]" style={{ fontFamily: HEAD, fontWeight: 300 }}>Settings</h1>
-          <p className="text-[13px] text-neutral-500 mt-1">Shipping, tax and payment credentials for the live store.</p>
+          <p className="text-[13px] text-neutral-500 mt-1">Shipping, tax, currency display and payment credentials.</p>
         </div>
         <Pill onClick={save} disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
@@ -143,24 +157,106 @@ export function LiveSettings({ toast }) {
         </Pill>
       </div>
 
-      <Section icon={Truck} title="Delivery" hint="Prices in South African rand. Set standard to 0 or enable free shipping for all orders.">
+      <Section icon={Truck} title="Delivery" hint="South Africa: set standard to free and still charge for express. International orders are always quoted — checkout will not charge shipping overseas.">
         <label className="flex items-center gap-2 mb-4 text-[14px] cursor-pointer">
           <input
             type="checkbox"
-            checked={Boolean(shipping.allFree)}
-            onChange={(e) => setShipping({ ...shipping, allFree: e.target.checked })}
+            checked={Boolean(shipping.allFree) || Number(shipping.standardPrice) === 0}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setShipping({
+                ...shipping,
+                allFree: false,
+                standardPrice: on ? 0 : (Number(shipping.standardPrice) > 0 ? shipping.standardPrice : 150),
+              });
+            }}
           />
-          Free shipping on all orders
+          Standard delivery is free
+          <span className="text-[12px] text-neutral-500">(express can still be charged)</span>
         </label>
-        <div className="grid sm:grid-cols-2 gap-4" style={{ opacity: shipping.allFree ? 0.45 : 1, pointerEvents: shipping.allFree ? "none" : "auto" }}>
-          <Field label="STANDARD DELIVERY (R)" hint="Shown as free when the order qualifies below.">
-            <input type="number" min="0" step="1" value={shipping.standardPrice} onChange={(e) => setShipping({ ...shipping, standardPrice: e.target.value })} {...inp} />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field
+            label="STANDARD DELIVERY (R)"
+            hint={Number(shipping.standardPrice) === 0 || shipping.allFree ? "Currently free for all SA orders." : "Shown as free when the order meets the threshold below."}
+          >
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={shipping.allFree ? 0 : shipping.standardPrice}
+              onChange={(e) => setShipping({ ...shipping, allFree: false, standardPrice: e.target.value })}
+              {...inp}
+            />
           </Field>
-          <Field label="EXPRESS DELIVERY (R)">
+          <Field label="EXPRESS DELIVERY (R)" hint="Always available as a paid upgrade when set above 0.">
             <input type="number" min="0" step="1" value={shipping.expressPrice} onChange={(e) => setShipping({ ...shipping, expressPrice: e.target.value })} {...inp} />
           </Field>
-          <Field label="FREE STANDARD OVER (R)" hint="Set to 0 to disable free-over threshold. Express is never free via this rule.">
-            <input type="number" min="0" step="1" value={shipping.freeOver} onChange={(e) => setShipping({ ...shipping, freeOver: e.target.value })} {...inp} />
+          <Field
+            label="FREE STANDARD OVER (R)"
+            hint="Only applies when standard is not free. Set to 0 to disable. Express is never free via this rule."
+          >
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={shipping.freeOver}
+              onChange={(e) => setShipping({ ...shipping, freeOver: e.target.value })}
+              disabled={Boolean(shipping.allFree) || Number(shipping.standardPrice) === 0}
+              {...inp}
+              style={{
+                ...inp.style,
+                opacity: Boolean(shipping.allFree) || Number(shipping.standardPrice) === 0 ? 0.45 : 1,
+              }}
+            />
+          </Field>
+        </div>
+
+        <div className="mt-6 pt-5" style={{ borderTop: `1px solid ${C.line}` }}>
+          <p className="text-[12px] tracking-[.08em] text-neutral-500 mb-3" style={{ fontFamily: HEAD }}>INTERNATIONAL</p>
+          <label className="flex items-start gap-2 mb-4 text-[14px] cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={Boolean(shipping.internationalUnframedOnly)}
+              onChange={(e) => setShipping({ ...shipping, internationalUnframedOnly: e.target.checked })}
+            />
+            <span>
+              International shipping — unframed prints only
+              <span className="block text-[12px] text-neutral-500 mt-1">
+                When enabled, overseas checkout blocks framed finishes (paper framed / canvas framed). SA customers are unaffected.
+              </span>
+            </span>
+          </label>
+          <Field label="QUOTE MESSAGE" hint="Shown at checkout when the shopper chooses International.">
+            <textarea
+              rows={2}
+              value={shipping.internationalNote || ""}
+              onChange={(e) => setShipping({ ...shipping, internationalNote: e.target.value })}
+              {...inp}
+            />
+          </Field>
+        </div>
+      </Section>
+
+      <Section icon={DollarSign} title="Currency display" hint="Checkout and PayFast always charge in South African rand. USD is an approximate display only.">
+        <label className="flex items-center gap-2 mb-4 text-[14px] cursor-pointer">
+          <input
+            type="checkbox"
+            checked={Boolean(currency.showUsd)}
+            onChange={(e) => setCurrency({ ...currency, showUsd: e.target.checked })}
+          />
+          Show approximate USD prices next to ZAR
+        </label>
+        <div style={{ opacity: currency.showUsd ? 1 : 0.45, pointerEvents: currency.showUsd ? "auto" : "none" }}>
+          <Field label="ZAR PER 1 USD" hint="Example: 18.5 means R2 800 ≈ $151. Update manually when the rate moves.">
+            <input
+              type="number"
+              min="0.01"
+              step="0.1"
+              value={currency.zarPerUsd}
+              onChange={(e) => setCurrency({ ...currency, zarPerUsd: e.target.value })}
+              {...inp}
+            />
           </Field>
         </div>
       </Section>

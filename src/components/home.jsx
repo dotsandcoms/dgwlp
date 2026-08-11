@@ -2,11 +2,14 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
-import { C, HEAD, zar, rangeOf } from "@/lib/pricing";
+import { C, HEAD, rangeOf } from "@/lib/pricing";
 import { siteImage } from "@/lib/supabase";
+import { formatMoney } from "@/lib/settings";
+import { usePublicSettings } from "@/lib/use-public-settings";
 import { Plate, Parallax, Reveal, Pill } from "./primitives";
 
 export function Card({ p }) {
+  const { currency } = usePublicSettings();
   const [min, max] = rangeOf(p);
   return (
     <div className="group text-center">
@@ -14,7 +17,10 @@ export function Card({ p }) {
         <Plate product={p} style={{ width: "100%", aspectRatio: "1/1", transition: "transform .6s" }} className="group-hover:scale-[1.05]" />
       </Link>
       <div className="mt-4 text-[16px]" style={{ fontFamily: HEAD }}>{p.name}</div>
-      <div className="text-[14px] text-neutral-600 mt-1">{zar(min)} – {zar(max)}</div>
+      <div className="text-[14px] text-neutral-600 mt-1">
+        {formatMoney(min, currency)}
+        {max !== min ? ` – ${formatMoney(max, currency)}` : ""}
+      </div>
       <div className="mt-3"><Link href={`/product/${p.slug}`}><Pill variant="outline" size="sm">Select options</Pill></Link></div>
     </div>
   );

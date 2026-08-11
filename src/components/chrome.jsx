@@ -3,12 +3,15 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, ShoppingBag, User, Minus, Plus, Trash2, Check, ShieldCheck, Search } from "lucide-react";
-import { C, HEAD, zar } from "@/lib/pricing";
+import { C, HEAD } from "@/lib/pricing";
+import { formatMoney } from "@/lib/settings";
+import { usePublicSettings } from "@/lib/use-public-settings";
 import { Plate, Pill, Row } from "./primitives";
 import { useCart, useAuth, useToast, useAuthModal } from "@/context/providers";
 import { browserClient, hasSupabase, imageUrl } from "@/lib/supabase";
 import { MOCK_PRODUCTS } from "@/lib/mock";
 import { adminPath } from "@/lib/admin-path";
+import { LegalModal } from "./legal";
 
 const LINKS = [["HOME", "/"], ["ABOUT", "/about"], ["SHOP", "/shop"], ["CONTACT", "/contact"]];
 
@@ -318,6 +321,8 @@ export function CartDrawer() {
   const cart = useCart();
   const { toast } = useToast();
   const router = useRouter();
+  const { currency } = usePublicSettings();
+  const money = (n) => formatMoney(n, currency);
   const go = () => { cart.setOpen(false); router.push("/checkout"); };
   return (
     <div className="fixed inset-0 z-[55]" style={{ pointerEvents: cart.open ? "auto" : "none" }}>
@@ -350,12 +355,12 @@ export function CartDrawer() {
                     <button onClick={() => { cart.remove(i.key); toast("Item removed"); }} className="text-neutral-400 hover:text-red-500"><Trash2 size={14} /></button>
                   </div>
                 </div>
-                <div className="text-[14px]" style={{ fontFamily: HEAD }}>{zar(i.price * i.qty)}</div>
+                <div className="text-[14px]" style={{ fontFamily: HEAD }}>{money(i.price * i.qty)}</div>
               </div>
             ))}
           </div>
           <div className="p-5 shrink-0" style={{ borderTop: `1px solid ${C.line}` }}>
-            <Row l="Subtotal" v={zar(cart.subtotal)} bold />
+            <Row l="Subtotal" v={money(cart.subtotal)} bold />
             <p className="text-[11px] text-neutral-500 mb-3">Shipping calculated at checkout · free over R2 500</p>
             <Pill onClick={go} style={{ width: "100%" }}>Secure checkout →</Pill>
           </div>
@@ -379,12 +384,13 @@ export function Toaster() {
 }
 
 export function Footer() {
+  const [legal, setLegal] = useState(null);
   return (
     <footer style={{ background: C.dark, color: "#cfcfcb" }}>
       <div className="max-w-[1240px] mx-auto px-5 py-14 grid gap-10 md:grid-cols-4">
         <div className="md:col-span-2">
           <div style={{ fontFamily: HEAD }} className="tracking-[.12em] text-white text-[16px] mb-3">DORON GOLDSTEIN <span style={{ color: C.green }}>PHOTOGRAPHY</span></div>
-          <p className="text-[13px] leading-relaxed opacity-80 max-w-sm">For the love of wildlife. Signed, limited-edition fine-art photographs — printed on archival paper and canvas, and shipped across South Africa.</p>
+          <p className="text-[13px] leading-relaxed opacity-80 max-w-sm">For the love of wildlife. Signed, limited-edition fine-art photographs — printed on archival paper and canvas. Shipped across South Africa; international delivery quoted on request.</p>
         </div>
         <div className="text-[13px]">
           <div style={{ fontFamily: HEAD }} className="tracking-[.14em] text-white mb-3 text-[12px]">EXPLORE</div>
@@ -392,7 +398,14 @@ export function Footer() {
         </div>
         <div className="text-[13px]">
           <div style={{ fontFamily: HEAD }} className="tracking-[.14em] text-white mb-3 text-[12px]">SECURE CHECKOUT</div>
-          <div className="flex items-center gap-2 opacity-80"><ShieldCheck size={15} /> PayFast · Paystack</div>
+          <div className="flex items-center gap-2 opacity-80 mb-3"><ShieldCheck size={15} /> PayFast · Paystack</div>
+          <div style={{ fontFamily: HEAD }} className="tracking-[.14em] text-white mb-3 text-[12px] mt-5">POLICIES</div>
+          <button type="button" onClick={() => setLegal("terms")} className="block py-1 opacity-80 hover:opacity-100 text-left">
+            Terms &amp; conditions
+          </button>
+          <button type="button" onClick={() => setLegal("shipping")} className="block py-1 opacity-80 hover:opacity-100 text-left">
+            Shipping terms
+          </button>
         </div>
       </div>
       <div className="text-center text-[11px] py-5 opacity-50 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3" style={{ borderTop: "1px solid #333" }}>
@@ -402,6 +415,7 @@ export function Footer() {
           Developed by Dotsandcoms
         </a>
       </div>
+      {legal && <LegalModal docKey={legal} onClose={() => setLegal(null)} />}
     </footer>
   );
 }

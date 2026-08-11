@@ -3,8 +3,8 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, Minus, Plus, Truck, ShieldCheck, Heart, ArrowLeft } from "lucide-react";
-import { C, HEAD, zar, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, minPriceForSize, availableSizesOf, availableMaterialsFor } from "@/lib/pricing";
-import { freeShippingLabel, DEFAULT_SETTINGS } from "@/lib/settings";
+import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, minPriceForSize, availableSizesOf, availableMaterialsFor } from "@/lib/pricing";
+import { freeShippingLabel, DEFAULT_SETTINGS, formatMoney, internationalShippingNote } from "@/lib/settings";
 import { Plate, Scene, RoomPreview, Dropdown, Pill } from "./primitives";
 import { useCart, useToast } from "@/context/providers";
 
@@ -26,6 +26,8 @@ export function ProductDetail({ product }) {
   const [wish, setWish] = useState(false);
   const [zoom, setZoom] = useState(false);
   const [shipNote, setShipNote] = useState("Free shipping on orders over R2 500");
+  const [intlNote, setIntlNote] = useState("");
+  const [currency, setCurrency] = useState(DEFAULT_SETTINGS.currency);
 
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem("dg_wish") || "[]"); setWish(s.includes(product.id)); } catch {} }, [product.id]);
   useEffect(() => { if (!matsForSize.some((m) => m.id === material)) setMaterial(matsForSize[0]?.id || "paper"); }, [size]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -38,8 +40,15 @@ export function ProductDetail({ product }) {
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        const label = freeShippingLabel(data?.shipping || DEFAULT_SETTINGS.shipping);
+        const shipping = { ...DEFAULT_SETTINGS.shipping, ...(data?.shipping || {}) };
+        const label = freeShippingLabel(shipping);
         setShipNote(label || "Nationwide courier delivery");
+        setCurrency({ ...DEFAULT_SETTINGS.currency, ...(data?.currency || {}) });
+        if (shipping.internationalUnframedOnly) {
+          setIntlNote(`${internationalShippingNote(shipping)} Unframed prints only for overseas orders.`);
+        } else {
+          setIntlNote(internationalShippingNote(shipping));
+        }
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -48,6 +57,7 @@ export function ProductDetail({ product }) {
   const mat = MATERIALS.find((m) => m.id === material) || MATERIALS[0];
   const unit = priceOfVariant(product, size, material);
   const colourLabel = COLOUR_LABEL[printColour] || COLOUR_LABEL.bw;
+  const money = (n) => formatMoney(n, currency);
   const summary = [
     colourLabel,
     sizeLabel(size),
@@ -139,7 +149,7 @@ export function ProductDetail({ product }) {
             <h1 className="text-[30px] sm:text-[38px] mb-3" style={{ fontFamily: HEAD, color: C.green, fontWeight: 400, letterSpacing: ".02em" }}>{product.name.toUpperCase()}</h1>
             <button onClick={toggleWish} className="mt-2 shrink-0" title="Wishlist"><Heart size={22} color={wish ? "#c0392b" : C.gray} fill={wish ? "#c0392b" : "none"} /></button>
           </div>
-          <div className="text-[22px] mb-1" style={{ fontFamily: HEAD }}>{zar(unit)}</div>
+          <div className="text-[22px] mb-1" style={{ fontFamily: HEAD }}>{money(unit)}</div>
           <div className="text-[12px] text-neutral-500 mb-5">{RATIOS[product.ratio].label} · limited edition</div>
           <p className="text-[15px] leading-relaxed text-neutral-700 mb-8">{product.desc}</p>
 
@@ -160,8 +170,8 @@ export function ProductDetail({ product }) {
             </div>
           )}
 
-          <Dropdown label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: `${sizeLabel(s)} — from ${zar(minPriceForSize(product, s))}` }))} />
-          <Dropdown label="Print & finish" value={material} onChange={setMaterial} options={matsForSize.map((m) => ({ value: m.id, label: `${m.label} — ${zar(priceOfVariant(product, size, m.id))}` }))} />
+          <Dropdown label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: `${sizeLabel(s)} — from ${money(minPriceForSize(product, s))}` }))} />
+          <Dropdown label="Print & finish" value={material} onChange={setMaterial} options={matsForSize.map((m) => ({ value: m.id, label: `${m.label} — ${money(priceOfVariant(product, size, m.id))}` }))} />
           {mat.framed && <Dropdown label="Frame colour" value={frameCol} onChange={setFrameCol} options={FRAME_COLOURS.map((f) => ({ value: f.id, label: f.label }))} />}
 
           <div className="flex items-center gap-4 mt-2">
@@ -177,6 +187,7 @@ export function ProductDetail({ product }) {
             <div>SKU: {product.sku}</div>
             <div>Category: {product.category}</div>
             <div className="flex items-center gap-2 pt-2 text-neutral-600"><Truck size={15} /> {shipNote}</div>
+            {intlNote && <div className="text-[12px] text-neutral-500 pl-6">{intlNote}</div>}
             <div className="flex items-center gap-2 text-neutral-600"><ShieldCheck size={15} /> Signed, limited-edition archival print</div>
           </div>
         </div>

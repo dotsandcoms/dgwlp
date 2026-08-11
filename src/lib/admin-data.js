@@ -154,7 +154,7 @@ export async function updateOrderStatus(id, status) {
 }
 
 /* ------------------------------- settings ----------------------------- */
-const SETTINGS_KEYS = ["shipping", "tax", "payfast"];
+const SETTINGS_KEYS = ["shipping", "tax", "currency", "payfast"];
 
 export async function fetchSettings() {
   const sb = browserClient();
@@ -242,7 +242,7 @@ export async function saveFeaturedIds(productIds = []) {
 
 export { FEATURED_MAX };
 
-/** Public shipping + tax only (uses anon RLS). */
+/** Public shipping + tax + currency (uses anon RLS where allowed; prefer /api/settings). */
 export async function fetchPublicSettings() {
   const sb = browserClient();
   if (!sb) {
@@ -250,15 +250,19 @@ export async function fetchPublicSettings() {
       const raw = localStorage.getItem("dg_site_settings");
       if (raw) {
         const m = mergeSettings(JSON.parse(raw));
-        return { shipping: m.shipping, tax: m.tax };
+        return { shipping: m.shipping, tax: m.tax, currency: m.currency };
       }
     } catch {}
-    return { shipping: DEFAULT_SETTINGS.shipping, tax: DEFAULT_SETTINGS.tax };
+    return {
+      shipping: DEFAULT_SETTINGS.shipping,
+      tax: DEFAULT_SETTINGS.tax,
+      currency: DEFAULT_SETTINGS.currency,
+    };
   }
-  const { data, error } = await sb.from("site_settings").select("key,value").in("key", ["shipping", "tax"]);
+  const { data, error } = await sb.from("site_settings").select("key,value").in("key", ["shipping", "tax", "currency"]);
   if (error) throw error;
   const partial = {};
   for (const row of data || []) partial[row.key] = row.value;
   const m = mergeSettings(partial);
-  return { shipping: m.shipping, tax: m.tax };
+  return { shipping: m.shipping, tax: m.tax, currency: m.currency };
 }

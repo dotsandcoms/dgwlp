@@ -13,8 +13,15 @@ const inp = {
 /**
  * Delivery address fields with Google Places autocomplete on the street line.
  * Autofills suburb, city, province and postal when a suggestion is chosen.
+ * Pass international to collect a country and skip SA province / Places ZA filter.
  */
-export function AddressFields({ value, onChange, showNotes = true, notesPlaceholder = "Delivery notes (optional — gate code, etc.)" }) {
+export function AddressFields({
+  value,
+  onChange,
+  showNotes = true,
+  notesPlaceholder = "Delivery notes (optional — gate code, etc.)",
+  international = false,
+}) {
   const f = value || emptyAddress();
   const streetRef = useRef(null);
   const acRef = useRef(null);
@@ -37,7 +44,7 @@ export function AddressFields({ value, onChange, showNotes = true, notesPlacehol
   }, []);
 
   const attach = useCallback((input, google) => {
-    if (!input || !google?.maps?.places) return;
+    if (!input || !google?.maps?.places || international) return;
     detach();
     const ac = new google.maps.places.Autocomplete(input, {
       componentRestrictions: { country: "za" },
@@ -59,12 +66,12 @@ export function AddressFields({ value, onChange, showNotes = true, notesPlacehol
     acRef.current = ac;
     setMapsReady(true);
     setMapsError("");
-  }, [detach]);
+  }, [detach, international]);
 
-  // Bind Places whenever this field mounts (e.g. Account → Edit).
-  // Retry briefly so a late-mounted input still gets autocomplete.
   useEffect(() => {
-    if (!mapsKey()) {
+    if (international || !mapsKey()) {
+      detach();
+      setMapsReady(false);
       setMapsError("");
       return undefined;
     }
@@ -87,7 +94,6 @@ export function AddressFields({ value, onChange, showNotes = true, notesPlacehol
 
     loadGoogleMaps()
       .then((google) => {
-        // Wait a frame so conditionally rendered inputs have a layout box
         requestAnimationFrame(() => tryAttach(google));
       })
       .catch(() => {
@@ -100,14 +106,14 @@ export function AddressFields({ value, onChange, showNotes = true, notesPlacehol
       detach();
       setMapsReady(false);
     };
-  }, [attach, detach]);
+  }, [attach, detach, international]);
 
   return (
     <div className="min-w-0 w-full max-w-full">
       <div className="text-[13px] tracking-[.1em] text-neutral-500 mb-2 flex items-center gap-2" style={{ fontFamily: HEAD }}>
         <MapPin size={14} /> DELIVERY ADDRESS
       </div>
-      {mapsKey() && mapsReady && (
+      {!international && mapsKey() && mapsReady && (
         <p className="text-[12px] text-neutral-500 mb-2">Start typing your street — pick a suggestion to autofill the rest.</p>
       )}
       {mapsError && <p className="text-[12px] text-amber-700 mb-2">{mapsError}</p>}
@@ -121,21 +127,25 @@ export function AddressFields({ value, onChange, showNotes = true, notesPlacehol
         {...inp}
       />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-3 min-w-0">
-        <input placeholder="Suburb" value={f.suburb} onChange={set("suburb")} autoComplete="address-level3" {...inp} />
+        <input placeholder="Suburb / area" value={f.suburb || ""} onChange={set("suburb")} autoComplete="address-level3" {...inp} />
         <input placeholder="City" value={f.city} onChange={set("city")} autoComplete="address-level2" {...inp} />
-        <div className="relative">
-          <select
-            value={f.province}
-            onChange={set("province")}
-            className="w-full appearance-none py-3.5 px-4 text-[14px] outline-none bg-white"
-            style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
-            autoComplete="address-level1"
-          >
-            {PROVINCES.map((p) => <option key={p}>{p}</option>)}
-          </select>
-          <ChevronDown size={15} className="absolute right-3 top-3.5 pointer-events-none" />
-        </div>
-        <input placeholder="Postal code" value={f.postal} onChange={set("postal")} autoComplete="postal-code" {...inp} />
+        {international ? (
+          <input placeholder="Country" value={f.country || ""} onChange={set("country")} autoComplete="country-name" {...inp} />
+        ) : (
+          <div className="relative">
+            <select
+              value={f.province}
+              onChange={set("province")}
+              className="w-full appearance-none py-3.5 px-4 text-[14px] outline-none bg-white"
+              style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
+              autoComplete="address-level1"
+            >
+              {PROVINCES.map((p) => <option key={p}>{p}</option>)}
+            </select>
+            <ChevronDown size={15} className="absolute right-3 top-3.5 pointer-events-none" />
+          </div>
+        )}
+        <input placeholder="Postal / ZIP code" value={f.postal} onChange={set("postal")} autoComplete="postal-code" {...inp} />
       </div>
       {showNotes && (
         <input placeholder={notesPlaceholder} value={f.notes} onChange={set("notes")} {...inp} />

@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { DEFAULT_SETTINGS, mergeSettings } from "./settings";
+import { DEFAULT_SETTINGS, mergeSettings, publicSettings } from "./settings";
 
 /** Server-only: read settings with service role (includes PayFast secrets). */
 export async function getServerSettings() {
@@ -10,7 +10,7 @@ export async function getServerSettings() {
   if (url && serviceKey) {
     try {
       const sb = createClient(url, serviceKey, { auth: { persistSession: false } });
-      const { data } = await sb.from("site_settings").select("key,value").in("key", ["shipping", "tax", "payfast"]);
+      const { data } = await sb.from("site_settings").select("key,value").in("key", ["shipping", "tax", "currency", "payfast"]);
       for (const row of data || []) fromDb[row.key] = row.value;
     } catch {
       // table may not exist yet
@@ -37,5 +37,5 @@ export async function getServerSettings() {
 
 export async function getPublicServerSettings() {
   const all = await getServerSettings();
-  return { shipping: all.shipping || DEFAULT_SETTINGS.shipping, tax: all.tax || DEFAULT_SETTINGS.tax };
+  return publicSettings(all);
 }

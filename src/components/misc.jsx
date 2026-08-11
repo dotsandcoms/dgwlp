@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { C, HEAD } from "@/lib/pricing";
 import { siteImage } from "@/lib/supabase";
@@ -176,6 +176,19 @@ export function Contact() {
     style: { border: `1px solid ${C.line}`, borderRadius: 4 },
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const qs = new URLSearchParams(window.location.search);
+    const subject = qs.get("subject");
+    const body = qs.get("body");
+    if (!subject && !body) return;
+    setF((prev) => ({
+      ...prev,
+      subject: subject || prev.subject,
+      msg: body || prev.msg,
+    }));
+  }, []);
+
   const submit = async () => {
     if (f.company) {
       toast("Message sent — Doron will be in touch");
@@ -271,7 +284,7 @@ export function Contact() {
                 {[
                   { label: "Email", value: "orders@dgwlp.co.za", href: "mailto:orders@dgwlp.co.za" },
                   { label: "Studio", value: "Johannesburg, South Africa" },
-                  { label: "Orders", value: "Archival paper & canvas · shipped nationwide" },
+                  { label: "Orders", value: "Archival paper & canvas · SA courier · international quoted" },
                 ].map((item) => (
                   <div key={item.label} style={{ borderBottom: `1px solid ${C.line}` }} className="pb-5">
                     <div className="text-[11px] tracking-[.18em] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>{item.label.toUpperCase()}</div>

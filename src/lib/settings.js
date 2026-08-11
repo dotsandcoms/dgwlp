@@ -1,16 +1,25 @@
 /** Storefront commercial settings — defaults + pure helpers. */
 
+import { zar, MATERIALS } from "./pricing";
+
 export const DEFAULT_SETTINGS = {
   shipping: {
-    standardPrice: 150,
+    standardPrice: 0, // free standard local delivery by default
     expressPrice: 300,
-    freeOver: 2500, // 0 = no free-over threshold
-    allFree: false,
+    freeOver: 0, // only used when standardPrice > 0
+    allFree: false, // legacy; if true, standard is free (express still charged)
+    internationalQuote: true,
+    internationalUnframedOnly: true,
+    internationalNote: "International shipping is quoted on request.",
   },
   tax: {
     enabled: false,
     ratePct: 15,
     label: "VAT",
+  },
+  currency: {
+    showUsd: false,
+    zarPerUsd: 18.5,
   },
   payfast: {
     merchantId: "",
@@ -24,6 +33,7 @@ export function mergeSettings(partial = {}) {
   return {
     shipping: { ...DEFAULT_SETTINGS.shipping, ...(partial.shipping || {}) },
     tax: { ...DEFAULT_SETTINGS.tax, ...(partial.tax || {}) },
+    currency: { ...DEFAULT_SETTINGS.currency, ...(partial.currency || {}) },
     payfast: { ...DEFAULT_SETTINGS.payfast, ...(partial.payfast || {}) },
   };
 }
@@ -31,7 +41,7 @@ export function mergeSettings(partial = {}) {
 /** Public-safe subset (no payment secrets). */
 export function publicSettings(settings) {
   const s = mergeSettings(settings);
-  return { shipping: s.shipping, tax: s.tax };
+  return { shipping: s.shipping, tax: s.tax, currency: s.currency };
 }
 
 /**
@@ -40,9 +50,12 @@ export function publicSettings(settings) {
  */
 export function shippingCost(shipping, method, subtotal) {
   const cfg = { ...DEFAULT_SETTINGS.shipping, ...(shipping || {}) };
-  if (cfg.allFree) return 0;
+  // Express is always its own rate — never zeroed by “free standard” / allFree.
   if (method === "express") return Math.max(0, Number(cfg.expressPrice) || 0);
+
+  if (cfg.allFree) return 0;
   const standard = Math.max(0, Number(cfg.standardPrice) || 0);
+  if (standard === 0) return 0;
   const freeOver = Number(cfg.freeOver) || 0;
   if (freeOver > 0 && subtotal >= freeOver) return 0;
   return standard;
@@ -57,22 +70,69 @@ export function taxAmount(tax, subtotal, shipping) {
   return Math.round(base * rate * 100) / 100;
 }
 
-export function orderTotals(settings, { subtotal, method }) {
+export function orderTotals(settings, { subtotal, method, international = false }) {
   const s = mergeSettings(settings);
+  if (international) {
+    const tax = taxAmount(s.tax, subtotal, 0);
+    const total = Math.round((subtotal + tax) * 100) / 100;
+    return {
+      subtotal,
+      shipping: 0,
+      shippingQuoted: true,
+      tax,
+      total,
+      taxLabel: s.tax.label || "VAT",
+      taxEnabled: s.tax.enabled,
+    };
+  }
   const shipping = shippingCost(s.shipping, method, subtotal);
   const tax = taxAmount(s.tax, subtotal, shipping);
   const total = Math.round((subtotal + shipping + tax) * 100) / 100;
-  return { subtotal, shipping, tax, total, taxLabel: s.tax.label || "VAT", taxEnabled: s.tax.enabled };
+  return {
+    subtotal,
+    shipping,
+    shippingQuoted: false,
+    tax,
+    total,
+    taxLabel: s.tax.label || "VAT",
+    taxEnabled: s.tax.enabled,
+  };
 }
 
 export function freeShippingLabel(shipping) {
   const cfg = { ...DEFAULT_SETTINGS.shipping, ...(shipping || {}) };
-  if (cfg.allFree) return "Free shipping on all orders";
+  const standardFree = cfg.allFree || Number(cfg.standardPrice) === 0;
+  if (standardFree) return "Free standard shipping nationwide";
   const freeOver = Number(cfg.freeOver) || 0;
   if (freeOver > 0) {
-    return `Free shipping on orders over R${Number(freeOver).toLocaleString("en-ZA")}`;
+    return `Free standard shipping on orders over R${Number(freeOver).toLocaleString("en-ZA")}`;
   }
   return null;
+}
+
+export function internationalShippingNote(shipping) {
+  const cfg = { ...DEFAULT_SETTINGS.shipping, ...(shipping || {}) };
+  return (cfg.internationalNote || DEFAULT_SETTINGS.shipping.internationalNote).trim();
+}
+
+export function isFramedMaterial(matId) {
+  return Boolean(MATERIALS.find((m) => m.id === matId)?.framed);
+}
+
+/** Cart lines that use a framed finish. */
+export function framedCartItems(items = []) {
+  return (items || []).filter((i) => isFramedMaterial(i.material));
+}
+
+/** ZAR display, optionally with approximate USD. */
+export function formatMoney(amountZar, currency) {
+  const base = zar(amountZar);
+  const cfg = { ...DEFAULT_SETTINGS.currency, ...(currency || {}) };
+  if (!cfg.showUsd) return base;
+  const rate = Number(cfg.zarPerUsd) || 0;
+  if (rate <= 0) return base;
+  const usd = Math.round((Number(amountZar) || 0) / rate);
+  return `${base} · ~$${usd.toLocaleString("en-US")}`;
 }
 
 /** Mask secrets for admin UI display. */

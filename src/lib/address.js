@@ -57,10 +57,12 @@ export function toDbAddress(addr, userId) {
 }
 
 export const emptyAddress = () => ({
+  destination: "za", // "za" | "international"
   street: "",
   suburb: "",
   city: "",
   province: PROVINCES[0],
+  country: "",
   postal: "",
   notes: "",
 });

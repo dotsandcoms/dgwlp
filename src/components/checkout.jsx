@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, CreditCard, Truck, ShieldCheck, ShoppingBag, Mail } from "lucide-react";
 import { C, HEAD, zar } from "@/lib/pricing";
@@ -7,10 +8,32 @@ import { Plate, Pill, Row } from "./primitives";
 import { RegisterForm, LoginForm } from "./forms";
 import { AddressFields } from "./address-fields";
 import { emptyAddress } from "@/lib/address";
-import { DEFAULT_SETTINGS, orderTotals, shippingCost } from "@/lib/settings";
+import {
+  DEFAULT_SETTINGS,
+  orderTotals,
+  shippingCost,
+  internationalShippingNote,
+  framedCartItems,
+  formatMoney,
+} from "@/lib/settings";
 import { useCart, useAuth, useToast } from "@/context/providers";
 import { friendlyError } from "@/lib/errors";
 import { placeOrder } from "@/lib/orders";
+
+function quoteContactHref(addr, items) {
+  const subject = encodeURIComponent("International shipping quote");
+  const lines = [
+    "Please quote international shipping for my order:",
+    "",
+    ...(items || []).map((i) => `- ${i.name} (${i.summary}) × ${i.qty}`),
+    "",
+    addr?.country ? `Country: ${addr.country}` : "",
+    addr?.city ? `City: ${addr.city}` : "",
+    addr?.street ? `Address: ${addr.street}` : "",
+  ].filter(Boolean);
+  const body = encodeURIComponent(lines.join("\n"));
+  return `/contact?subject=${subject}&body=${body}`;
+}
 
 export function CheckoutFlow() {
   const cart = useCart();
@@ -23,9 +46,11 @@ export function CheckoutFlow() {
   const [ship, setShip] = useState("standard");
   const [pay, setPay] = useState("payfast");
   const [addr, setAddr] = useState(null);
+  const [destination, setDestination] = useState("za");
   const [storeSettings, setStoreSettings] = useState({
     shipping: DEFAULT_SETTINGS.shipping,
     tax: DEFAULT_SETTINGS.tax,
+    currency: DEFAULT_SETTINGS.currency,
   });
 
   useEffect(() => { if (user) { setStep((s) => (s === 1 ? 2 : s)); setAddr(user.address || null); } }, [user]);
@@ -39,22 +64,25 @@ export function CheckoutFlow() {
         setStoreSettings({
           shipping: { ...DEFAULT_SETTINGS.shipping, ...(data.shipping || {}) },
           tax: { ...DEFAULT_SETTINGS.tax, ...(data.tax || {}) },
+          currency: { ...DEFAULT_SETTINGS.currency, ...(data.currency || {}) },
         });
       })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
+  const international = destination === "international";
   const totals = useMemo(
-    () => orderTotals(storeSettings, { subtotal: cart.subtotal, method: ship }),
-    [storeSettings, cart.subtotal, ship]
+    () => orderTotals(storeSettings, { subtotal: cart.subtotal, method: ship, international }),
+    [storeSettings, cart.subtotal, ship, international]
   );
-  const { shipping: shipCost, tax: taxCost, total, taxLabel, taxEnabled } = totals;
+  const { shipping: shipCost, tax: taxCost, total, taxLabel, taxEnabled, shippingQuoted } = totals;
   const steps = ["Account", "Delivery", "Payment"];
+  const money = (n) => formatMoney(n, storeSettings.currency);
 
   /** Persist delivery (including notes) to the signed-in profile. */
   const saveDeliveryToProfile = async (delivery) => {
-    if (!user || !delivery?.street) return;
+    if (!user || !delivery?.street || delivery.destination === "international") return;
     try {
       await updateProfile({
         name: user.name,
@@ -74,6 +102,11 @@ export function CheckoutFlow() {
   };
 
   const place = async () => {
+    if (international) {
+      toast("International shipping is quoted — use Request a quote");
+      setStep(2);
+      return;
+    }
     if (!user?.email) {
       toast("Please sign in to place an order");
       setStep(1);
@@ -88,7 +121,7 @@ export function CheckoutFlow() {
         subtotal: cart.subtotal,
         shipping: shipCost,
         total,
-        delivery: addr,
+        delivery: { ...(addr || {}), destination: "za" },
         pay,
         shipMethod: ship,
       });
@@ -176,6 +209,9 @@ export function CheckoutFlow() {
               setShip={setShip}
               subtotal={cart.subtotal}
               shippingCfg={storeSettings.shipping}
+              cartItems={cart.items}
+              destination={destination}
+              setDestination={setDestination}
               onBack={() => setStep(user ? 2 : 1)}
               onNext={async (delivery) => {
                 setAddr(delivery);
@@ -185,7 +221,7 @@ export function CheckoutFlow() {
             />
           )}
 
-          {step === 3 && (
+          {step === 3 && !international && (
             <div>
               <h3 className="text-[14px] tracking-[.1em] mb-4" style={{ fontFamily: HEAD }}>PAYMENT METHOD</h3>
               {[["payfast", "PayFast", "Cards · Instant EFT · SnapScan"], ["paystack", "Paystack", "Cards & bank transfer"]].map(([id, n, d]) => (
@@ -217,49 +253,163 @@ export function CheckoutFlow() {
           {cart.items.map((i) => (
             <div key={i.key} className="flex gap-3 mb-3 min-w-0">
               <Plate product={i.product} showSig={false} style={{ width: 46, height: 46, borderRadius: 3, flexShrink: 0 }} />
-              <div className="flex-1 min-w-0"><div className="text-[13px] truncate" style={{ fontFamily: HEAD }}>{i.name} × {i.qty}</div><div className="text-[11px] text-neutral-500 truncate">{i.summary}</div></div>
-              <div className="text-[13px] shrink-0">{zar(i.price * i.qty)}</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] truncate" style={{ fontFamily: HEAD }}>{i.name}</div>
+                <div className="text-[11px] text-neutral-500 truncate">{i.summary} · qty {i.qty}</div>
+              </div>
+              <div className="text-[13px] shrink-0">{money(i.price * i.qty)}</div>
             </div>
           ))}
-          <div className="my-3" style={{ borderTop: "1px solid #d6dcc9" }} />
-          <Row l="Subtotal" v={zar(cart.subtotal)} />
-          <Row l="Shipping" v={step >= 2 ? (shipCost === 0 ? "Free" : zar(shipCost)) : "—"} />
-          {taxEnabled && step >= 2 && <Row l={`${taxLabel} (${storeSettings.tax.ratePct}%)`} v={zar(taxCost)} />}
-          <div className="my-2" style={{ borderTop: "1px solid #d6dcc9" }} />
-          <Row l="Total" v={zar(step >= 2 ? total : cart.subtotal)} bold />
+          <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+            <Row l="Subtotal" v={money(cart.subtotal)} />
+            <Row l="Shipping" v={step >= 2 ? (shippingQuoted ? "Quoted" : (shipCost === 0 ? "Free" : zar(shipCost))) : "—"} />
+            {taxEnabled && step >= 2 && !shippingQuoted && <Row l={`${taxLabel} (${storeSettings.tax.ratePct}%)`} v={zar(taxCost)} />}
+            <div className="mt-2" />
+            <Row l="Total" v={shippingQuoted ? `${money(cart.subtotal)} + shipping` : money(step >= 2 ? total : cart.subtotal)} bold />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function DeliveryStep({ addr, setAddr, ship, setShip, subtotal, shippingCfg, onBack, onNext }) {
-  const [f, setF] = useState(() => ({ ...emptyAddress(), ...(addr || {}) }));
-  const ready = f.street && f.city && f.postal;
+function DeliveryStep({
+  addr,
+  setAddr,
+  ship,
+  setShip,
+  subtotal,
+  shippingCfg,
+  cartItems,
+  destination,
+  setDestination,
+  onBack,
+  onNext,
+}) {
+  const international = destination === "international";
+  const [f, setF] = useState(() => ({
+    ...emptyAddress(),
+    ...(addr || {}),
+    destination: destination || addr?.destination || "za",
+  }));
+
+  useEffect(() => {
+    setF((prev) => ({ ...prev, destination }));
+  }, [destination]);
+
+  const framed = useMemo(
+    () => (international && shippingCfg.internationalUnframedOnly ? framedCartItems(cartItems) : []),
+    [international, shippingCfg.internationalUnframedOnly, cartItems]
+  );
+  const framedBlocked = framed.length > 0;
+
+  const ready = international
+    ? Boolean(f.street && f.city && f.country && !framedBlocked)
+    : Boolean(f.street && f.city && f.postal);
+
   const standardCost = shippingCost(shippingCfg, "standard", subtotal);
   const expressCost = shippingCost(shippingCfg, "express", subtotal);
+  const note = internationalShippingNote(shippingCfg);
+
+  const chooseDestination = (id) => {
+    setDestination(id);
+    setF((prev) => ({ ...prev, destination: id }));
+  };
+
   return (
     <div>
-      <h3 className="text-[14px] tracking-[.1em] mb-4" style={{ fontFamily: HEAD }}>DELIVERY DETAILS</h3>
+      <h3 className="text-[14px] tracking-[.1em] mb-3" style={{ fontFamily: HEAD }}>DESTINATION</h3>
+      <div className="grid sm:grid-cols-2 gap-2 mb-6">
+        {[
+          ["za", "South Africa", "Courier rates at checkout"],
+          ["international", "International", "Shipping quoted on request"],
+        ].map(([id, title, hint]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => chooseDestination(id)}
+            className="text-left p-3"
+            style={{
+              border: `1px solid ${destination === id ? C.green : C.line}`,
+              borderRadius: 4,
+              background: destination === id ? C.greenSoft : "#fff",
+            }}
+          >
+            <div className="text-[14px]" style={{ fontFamily: HEAD }}>{title}</div>
+            <div className="text-[12px] text-neutral-500 mt-0.5">{hint}</div>
+          </button>
+        ))}
+      </div>
+
       <AddressFields
         value={f}
         onChange={setF}
-        notesPlaceholder="Delivery notes (optional)"
+        international={international}
+        notesPlaceholder={international ? "Anything we should know for the quote (optional)" : "Delivery notes (optional)"}
       />
 
-      <h3 className="text-[14px] tracking-[.1em] mt-8 mb-3" style={{ fontFamily: HEAD }}>SHIPPING METHOD</h3>
-      {[
-        ["standard", "Standard courier", "2–4 working days", standardCost],
-        ["express", "Express courier", "1–2 working days", expressCost],
-      ].map(([id, n, d, cost]) => (
-        <label key={id} className="flex items-center justify-between p-3 mb-2 cursor-pointer" style={{ border: `1px solid ${ship === id ? C.green : C.line}`, borderRadius: 4 }}>
-          <div className="flex items-center gap-3"><input type="radio" checked={ship === id} onChange={() => setShip(id)} /><Truck size={17} color={C.green} /><div><div className="text-[14px]" style={{ fontFamily: HEAD }}>{n}</div><div className="text-[12px] text-neutral-500">{d}</div></div></div>
-          <span className="text-[14px]" style={{ fontFamily: HEAD }}>{cost === 0 ? "Free" : zar(cost)}</span>
-        </label>
-      ))}
-      <div className="flex items-center justify-between mt-6">
-        <button onClick={onBack} className="text-[13px] text-neutral-500">← Account</button>
-        <Pill onClick={() => { if (ready) { setAddr(f); onNext(f); } }} style={{ opacity: ready ? 1 : .5, pointerEvents: ready ? "auto" : "none" }}>Continue to payment →</Pill>
+      {international ? (
+        <div className="mt-6 p-4 rounded" style={{ background: "#faf9f6", border: `1px solid ${C.line}` }}>
+          <div className="flex items-start gap-2 mb-2">
+            <Truck size={17} color={C.green} className="mt-0.5 shrink-0" />
+            <div>
+              <div className="text-[14px]" style={{ fontFamily: HEAD }}>International shipping</div>
+              <p className="text-[13px] text-neutral-600 mt-1">{note}</p>
+              {shippingCfg.internationalUnframedOnly && (
+                <p className="text-[12px] text-neutral-500 mt-2">Overseas orders are unframed prints only.</p>
+              )}
+            </div>
+          </div>
+          {framedBlocked && (
+            <div className="mt-3 p-3 text-[13px] rounded" style={{ background: "#fff7ed", border: "1px solid #fed7aa", color: "#9a3412" }}>
+              Remove or change framed items before requesting a quote:
+              <ul className="mt-1 list-disc pl-5">
+                {framed.map((i) => (
+                  <li key={i.key}>{i.name} — {i.summary}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <h3 className="text-[14px] tracking-[.1em] mt-8 mb-3" style={{ fontFamily: HEAD }}>SHIPPING METHOD</h3>
+          {[
+            ["standard", "Standard courier", "2–4 working days", standardCost],
+            ["express", "Express courier", "1–2 working days", expressCost],
+          ].map(([id, n, d, cost]) => (
+            <label key={id} className="flex items-center justify-between p-3 mb-2 cursor-pointer" style={{ border: `1px solid ${ship === id ? C.green : C.line}`, borderRadius: 4 }}>
+              <div className="flex items-center gap-3"><input type="radio" checked={ship === id} onChange={() => setShip(id)} /><Truck size={17} color={C.green} /><div><div className="text-[14px]" style={{ fontFamily: HEAD }}>{n}</div><div className="text-[12px] text-neutral-500">{d}</div></div></div>
+              <span className="text-[14px]" style={{ fontFamily: HEAD }}>{cost === 0 ? "Free" : zar(cost)}</span>
+            </label>
+          ))}
+        </>
+      )}
+
+      <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 mt-6">
+        <button type="button" onClick={onBack} className="text-[13px] text-neutral-500 text-center sm:text-left">← Account</button>
+        {international ? (
+          <Link
+            href={ready ? quoteContactHref({ ...f, destination: "international" }, cartItems) : "#"}
+            onClick={(e) => {
+              if (!ready) {
+                e.preventDefault();
+                return;
+              }
+              setAddr({ ...f, destination: "international" });
+            }}
+            style={{ pointerEvents: ready ? "auto" : "none", opacity: ready ? 1 : 0.5 }}
+          >
+            <Pill style={{ width: "100%", maxWidth: 360 }}>Request a shipping quote →</Pill>
+          </Link>
+        ) : (
+          <Pill
+            onClick={() => { if (ready) { setAddr({ ...f, destination: "za" }); onNext({ ...f, destination: "za" }); } }}
+            style={{ opacity: ready ? 1 : 0.5, pointerEvents: ready ? "auto" : "none", width: "100%", maxWidth: 360 }}
+          >
+            Continue to payment →
+          </Pill>
+        )}
       </div>
     </div>
   );
@@ -281,7 +431,7 @@ export function Confirmation() {
       <h1 className="text-[30px] mb-2" style={{ fontFamily: HEAD, fontWeight: 300 }}>Thank you!</h1>
       <p className="text-neutral-600 text-[15px] mb-8">Order <b>{order.id}</b> is confirmed. A receipt is on its way{order.delivery ? ` and we'll deliver to ${order.delivery.city}` : ""}.</p>
       <div className="text-left rounded-lg overflow-hidden mx-auto" style={{ border: `1px solid ${C.line}`, maxWidth: 520 }}>
-        <div className="px-5 py-3 flex items-center gap-2 text-[12px] text-neutral-500" style={{ background: "#faf9f6", borderBottom: `1px solid ${C.line}` }}><Mail size={14} /> Automated email · sent via Resend</div>
+        <div className="px-5 py-3 flex items-center gap-2 text-[12px] text-neutral-500" style={{ background: "#faf9f6", borderBottom: `1px solid ${C.line}` }}><Mail size={14} /> Order confirmation</div>
         <div className="p-6">
           <div style={{ fontFamily: HEAD }} className="tracking-[.12em] text-[14px] mb-1">DORON GOLDSTEIN <span style={{ color: C.green }}>PHOTOGRAPHY</span></div>
           <p className="text-[13px] text-neutral-600 mb-4">Your order receipt — {order.id}</p>

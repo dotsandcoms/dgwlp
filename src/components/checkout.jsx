@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CreditCard, Truck, ShieldCheck, ShoppingBag, Mail } from "lucide-react";
+import { Check, CreditCard, Truck, ShieldCheck, ShoppingBag } from "lucide-react";
 import { C, HEAD, zar } from "@/lib/pricing";
-import { Plate, Pill, Row } from "./primitives";
+import { siteImage } from "@/lib/supabase";
+import { Plate, Pill, Row, Reveal } from "./primitives";
 import { RegisterForm, LoginForm } from "./forms";
 import { AddressFields } from "./address-fields";
 import { emptyAddress } from "@/lib/address";
@@ -415,40 +416,191 @@ function DeliveryStep({
   );
 }
 
+function orderHeroImage(items) {
+  for (const i of items || []) {
+    const src = i.product?.image || i.image;
+    if (src) return src;
+  }
+  return siteImage("elephant-plains.jpg");
+}
+
 export function Confirmation() {
   const router = useRouter();
   const [order, setOrder] = useState(null);
   useEffect(() => { try { const s = localStorage.getItem("dg_last_order"); if (s) setOrder(JSON.parse(s)); } catch {} }, []);
-  if (!order) return (
-    <div className="max-w-[600px] mx-auto px-5 py-24 text-center">
-      <h2 className="text-[24px] mb-4" style={{ fontFamily: HEAD, fontWeight: 300 }}>No recent order</h2>
-      <Pill onClick={() => router.push("/shop")}>Browse the collection</Pill>
-    </div>
-  );
-  return (
-    <div className="max-w-[720px] mx-auto px-5 py-14 text-center">
-      <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-5" style={{ background: C.greenSoft }}><Check size={30} color={C.green} /></div>
-      <h1 className="text-[30px] mb-2" style={{ fontFamily: HEAD, fontWeight: 300 }}>Thank you!</h1>
-      <p className="text-neutral-600 text-[15px] mb-8">Order <b>{order.id}</b> is confirmed. A receipt is on its way{order.delivery ? ` and we'll deliver to ${order.delivery.city}` : ""}.</p>
-      <div className="text-left rounded-lg overflow-hidden mx-auto" style={{ border: `1px solid ${C.line}`, maxWidth: 520 }}>
-        <div className="px-5 py-3 flex items-center gap-2 text-[12px] text-neutral-500" style={{ background: "#faf9f6", borderBottom: `1px solid ${C.line}` }}><Mail size={14} /> Order confirmation</div>
-        <div className="p-6">
-          <div style={{ fontFamily: HEAD }} className="tracking-[.12em] text-[14px] mb-1">DORON GOLDSTEIN <span style={{ color: C.green }}>PHOTOGRAPHY</span></div>
-          <p className="text-[13px] text-neutral-600 mb-4">Your order receipt — {order.id}</p>
-          {order.items.map((i) => (
-            <div key={i.key} className="flex justify-between text-[13px] py-1.5" style={{ borderBottom: `1px solid ${C.line}` }}>
-              <span>{i.name} <span className="text-neutral-400">({i.summary}) × {i.qty}</span></span><span>{zar(i.price * i.qty)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between text-[13px] py-1.5"><span className="text-neutral-500">Shipping</span><span>{order.shipping === 0 ? "Free" : zar(order.shipping)}</span></div>
-          {order.tax > 0 && (
-            <div className="flex justify-between text-[13px] py-1.5"><span className="text-neutral-500">{order.taxLabel || "VAT"}</span><span>{zar(order.tax)}</span></div>
-          )}
-          <div className="flex justify-between text-[14px] pt-2" style={{ fontFamily: HEAD, fontWeight: 600 }}><span>Total paid</span><span>{zar(order.total)}</span></div>
-          <p className="text-[12px] text-neutral-500 mt-4">We'll send a separate shipping confirmation with tracking once your print is on its way.</p>
+
+  if (!order) {
+    return (
+      <div>
+        <section className="relative overflow-hidden" style={{ minHeight: 220 }}>
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `url(${siteImage("elephant-plains.jpg")})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center 40%",
+              filter: "grayscale(1) contrast(1.05)",
+              transform: "scale(1.04)",
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(180deg,rgba(20,20,18,.45) 0%,rgba(20,20,18,.72) 100%)" }}
+          />
+          <div className="relative max-w-[1240px] mx-auto px-5 py-12 sm:py-16">
+            <p className="text-[11px] tracking-[.28em] mb-3" style={{ fontFamily: HEAD, color: C.green }}>
+              DORON GOLDSTEIN · WILDLIFE PHOTOGRAPHY
+            </p>
+            <h1 className="text-white text-[36px] sm:text-[52px] leading-[0.95] font-light mb-4" style={{ fontFamily: HEAD }}>
+              Order confirmed
+            </h1>
+            <p className="text-white/75 text-[15px] sm:text-[17px] max-w-[520px] leading-relaxed" style={{ fontFamily: HEAD, fontWeight: 300 }}>
+              No recent order found on this device. Browse the collection to find your next print.
+            </p>
+          </div>
+        </section>
+        <div className="max-w-[640px] mx-auto px-5 py-16 text-center">
+          <Pill onClick={() => router.push("/shop")}>Browse the collection</Pill>
         </div>
       </div>
-      <div className="mt-8"><Pill variant="outline" onClick={() => router.push("/shop")}>Continue shopping</Pill></div>
+    );
+  }
+
+  const items = order.items || order.lines || [];
+  const city = order.delivery?.city;
+  const itemCount = items.reduce((n, i) => n + (i.qty || 1), 0);
+  const heroBg = orderHeroImage(items);
+
+  return (
+    <div>
+      <section className="relative overflow-hidden" style={{ minHeight: 220 }}>
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url(${heroBg})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center 40%",
+            filter: "grayscale(1) contrast(1.05)",
+            transform: "scale(1.04)",
+            animation: "orderBannerIn .55s ease",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(180deg,rgba(20,20,18,.45) 0%,rgba(20,20,18,.72) 100%)" }}
+        />
+        <div className="relative max-w-[1240px] mx-auto px-5 py-12 sm:py-16">
+          <p className="text-[11px] tracking-[.28em] mb-3" style={{ fontFamily: HEAD, color: C.green }}>
+            DORON GOLDSTEIN · WILDLIFE PHOTOGRAPHY
+          </p>
+          <h1
+            className="text-white text-[36px] sm:text-[52px] leading-[0.95] font-light mb-4"
+            style={{ fontFamily: HEAD, animation: "orderTitleIn .4s ease" }}
+          >
+            Thank you
+          </h1>
+          <p className="text-white/75 text-[15px] sm:text-[17px] max-w-[520px] leading-relaxed" style={{ fontFamily: HEAD, fontWeight: 300 }}>
+            Order {order.id} is confirmed.
+            {city ? ` We’ll deliver to ${city}.` : ""} A receipt is on its way to your inbox.
+          </p>
+          <p className="mt-5 text-[13px] text-white/55" style={{ fontFamily: HEAD }}>
+            {itemCount} print{itemCount === 1 ? "" : "s"} · {zar(order.total)} paid
+          </p>
+        </div>
+        <style>{`
+          @keyframes orderBannerIn {
+            from { opacity: 0; transform: scale(1.08); }
+            to { opacity: 1; transform: scale(1.04); }
+          }
+          @keyframes orderTitleIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
+      </section>
+
+      <div className="max-w-[640px] mx-auto px-5 pt-12 pb-24">
+        <Reveal>
+          <div className="flex items-center gap-3 mb-8">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: C.greenSoft }}
+            >
+              <Check size={18} color={C.green} strokeWidth={2.25} />
+            </div>
+            <div>
+              <p className="text-[14px]" style={{ fontFamily: HEAD }}>Order confirmed</p>
+              <p className="text-[12px] text-neutral-500">We’ll email tracking once your print ships.</p>
+            </div>
+          </div>
+        </Reveal>
+
+        <Reveal delay={80}>
+          <div className="mb-10">
+            <div className="flex items-baseline justify-between mb-1">
+              <h2 className="text-[12px] tracking-[.16em] text-neutral-500" style={{ fontFamily: HEAD }}>YOUR PRINTS</h2>
+              <span className="text-[12px] text-neutral-400" style={{ fontFamily: HEAD }}>{order.id}</span>
+            </div>
+            <div>
+              {items.map((i, idx) => {
+                const product = i.product || {
+                  name: i.name,
+                  image: i.image,
+                  colour: i.colour || i.printColour || "bw",
+                  ratio: i.ratio || "landscape",
+                  grad: i.grad || ["#333", "#9a9a97"],
+                  angle: i.angle || 120,
+                };
+                return (
+                  <div
+                    key={i.key || `${i.name}-${idx}`}
+                    className="flex gap-4 py-4"
+                    style={{ borderTop: `1px solid ${C.line}` }}
+                  >
+                    <Plate
+                      product={product}
+                      printColour={i.printColour || i.colour}
+                      showSig={false}
+                      style={{ width: 72, height: 72, borderRadius: 3, flexShrink: 0 }}
+                    />
+                    <div className="flex-1 min-w-0 text-left">
+                      <div className="text-[15px] truncate" style={{ fontFamily: HEAD }}>{i.name}</div>
+                      <div className="text-[12px] text-neutral-500 mt-1 leading-relaxed">{i.summary}</div>
+                      <div className="text-[12px] text-neutral-400 mt-1">Qty {i.qty}</div>
+                    </div>
+                    <div className="text-[14px] shrink-0 pt-0.5" style={{ fontFamily: HEAD }}>
+                      {zar(i.price * i.qty)}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="pt-4 space-y-1.5" style={{ borderTop: `1px solid ${C.line}` }}>
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-neutral-500">Shipping</span>
+                  <span>{order.shipping === 0 ? "Free" : zar(order.shipping)}</span>
+                </div>
+                {order.tax > 0 && (
+                  <div className="flex justify-between text-[13px]">
+                    <span className="text-neutral-500">{order.taxLabel || "VAT"}</span>
+                    <span>{zar(order.tax)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-[16px] pt-2" style={{ fontFamily: HEAD, fontWeight: 500 }}>
+                  <span>Total paid</span>
+                  <span>{zar(order.total)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+
+        <Reveal delay={160}>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Pill onClick={() => router.push("/shop")}>Continue shopping</Pill>
+            <Pill variant="outline" onClick={() => router.push("/account")}>View orders</Pill>
+          </div>
+        </Reveal>
+      </div>
     </div>
   );
 }

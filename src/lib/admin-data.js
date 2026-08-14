@@ -4,6 +4,7 @@
 "use client";
 import { browserClient } from "./supabase";
 import { DEFAULT_SETTINGS, mergeSettings } from "./settings";
+import { enrichOrdersWithImages } from "./orders";
 
 export const slugify = (s) =>
   (s || "").toString().trim().toLowerCase()
@@ -134,23 +135,172 @@ export async function deleteProduct(id) {
 }
 
 /* --------------------------------- orders ------------------------------ */
+const ORDER_DETAIL_SELECT = `
+  id,order_no,email,user_id,status,total_cents,subtotal_cents,shipping_cents,
+  created_at,delivery,payment_provider,tracking_no,shipping_method,
+  order_items(product_name,size_id,material_id,frame_colour_id,colour,unit_price_cents,qty)
+`;
+
+function customerFromDelivery(delivery) {
+  if (!delivery || typeof delivery !== "object") return { name: null, phone: null };
+  return {
+    name: delivery.name || delivery.full_name || null,
+    phone: delivery.phone || delivery.mobile || null,
+  };
+}
+
+function mapAdminOrder(row, profile) {
+  const lines = (row.order_items || []).map((i) => ({
+    name: i.product_name,
+    summary: [i.material_id, i.size_id, i.frame_colour_id].filter(Boolean).join(" · "),
+    qty: i.qty || 1,
+    price: (i.unit_price_cents || 0) / 100,
+    colour: i.colour || "bw",
+    ratio: "landscape",
+    image: null,
+    grad: ["#2f2f2d", "#a9a49b"],
+    angle: 120,
+  }));
+
+  const pay =
+    row.payment_provider === "paystack" ? "Paystack"
+      : row.payment_provider === "payfast" ? "PayFast"
+        : row.payment_provider || "Card";
+
+  const fromDelivery = customerFromDelivery(row.delivery);
+  const customerName = fromDelivery.name || profile?.full_name || null;
+  const customerPhone = fromDelivery.phone || profile?.phone || null;
+
+  return {
+    id: row.id,
+    order_no: row.order_no || row.id,
+    user_id: row.user_id || null,
+    email: row.email || null,
+    customerName,
+    customerPhone,
+    status: row.status || "pending",
+    date: row.created_at
+      ? new Date(row.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+      : "",
+    created_at: row.created_at,
+    item_count: lines.reduce((n, l) => n + (l.qty || 1), 0),
+    subtotal: row.subtotal_cents != null ? row.subtotal_cents / 100 : lines.reduce((n, l) => n + l.price * l.qty, 0),
+    shipping: row.shipping_cents != null ? row.shipping_cents / 100 : 0,
+    total: row.total_cents != null ? row.total_cents / 100 : 0,
+    total_cents: row.total_cents ?? 0,
+    pay,
+    tracking: row.tracking_no || "",
+    delivery: row.delivery || null,
+    shippingMethod: row.shipping_method || null,
+    lines,
+  };
+}
+
+/** Load profile name/phone for a set of user ids (admin can read via RLS). */
+async function fetchProfilesByIds(sb, userIds) {
+  const ids = [...new Set((userIds || []).filter(Boolean))];
+  if (!ids.length) return new Map();
+  const { data, error } = await sb
+    .from("profiles")
+    .select("id,full_name,phone")
+    .in("id", ids);
+  if (error || !data) return new Map();
+  return new Map(data.map((p) => [p.id, p]));
+}
+
 export async function fetchOrders() {
   const sb = browserClient();
   const { data, error } = await sb
     .from("orders")
-    .select("id,order_no,email,status,total_cents,created_at,order_items(qty)")
+    .select("id,order_no,email,user_id,status,total_cents,created_at,delivery,order_items(qty)")
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data || []).map((o) => ({
-    ...o,
-    item_count: (o.order_items || []).reduce((n, i) => n + (i.qty || 0), 0),
-  }));
+
+  const profiles = await fetchProfilesByIds(sb, (data || []).map((o) => o.user_id));
+
+  return (data || []).map((o) => {
+    const profile = profiles.get(o.user_id);
+    const fromDelivery = customerFromDelivery(o.delivery);
+    return {
+      ...o,
+      item_count: (o.order_items || []).reduce((n, i) => n + (i.qty || 0), 0),
+      customerName: fromDelivery.name || profile?.full_name || null,
+      customerPhone: fromDelivery.phone || profile?.phone || null,
+      deliveryCity: o.delivery?.city || null,
+    };
+  });
+}
+
+/** Full order for the admin detail modal (items + images + delivery + customer). */
+export async function fetchOrderDetail(id) {
+  const sb = browserClient();
+  const { data, error } = await sb
+    .from("orders")
+    .select(ORDER_DETAIL_SELECT)
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  const profiles = await fetchProfilesByIds(sb, [data.user_id]);
+  const mapped = mapAdminOrder(data, profiles.get(data.user_id));
+  const [enriched] = await enrichOrdersWithImages(sb, [mapped]);
+  return enriched || mapped;
+}
+
+/**
+ * Update order status / tracking. Returns the updated row.
+ * Caller should fire status emails via notifyOrderStatusEmail.
+ */
+export async function updateOrder(id, { status, tracking_no } = {}) {
+  const sb = browserClient();
+  const patch = {};
+  if (status != null) patch.status = status;
+  if (tracking_no !== undefined) patch.tracking_no = tracking_no ? String(tracking_no).trim() : null;
+  if (!Object.keys(patch).length) return null;
+
+  const { data, error } = await sb
+    .from("orders")
+    .update(patch)
+    .eq("id", id)
+    .select(ORDER_DETAIL_SELECT)
+    .single();
+  if (error) throw error;
+  const profiles = await fetchProfilesByIds(sb, [data.user_id]);
+  const mapped = mapAdminOrder(data, profiles.get(data.user_id));
+  const [enriched] = await enrichOrdersWithImages(sb, [mapped]);
+  return enriched || mapped;
 }
 
 export async function updateOrderStatus(id, status) {
-  const sb = browserClient();
-  const { error } = await sb.from("orders").update({ status }).eq("id", id);
-  if (error) throw error;
+  return updateOrder(id, { status });
+}
+
+/**
+ * Fire a transactional email for a status change.
+ * Safe to call before Resend templates exist — /api/email no-ops without a key.
+ */
+export async function notifyOrderStatusEmail(order, status) {
+  if (!order?.email) return { skipped: true };
+  try {
+    const res = await fetch("/api/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: status,
+        order: {
+          id: order.order_no || order.id,
+          email: order.email,
+          items: order.lines || order.items || [],
+          total: order.total,
+          tracking: order.tracking || null,
+          status,
+          delivery: order.delivery || null,
+        },
+      }),
+    });
+    return await res.json().catch(() => ({}));
+  } catch {
+    return { skipped: true };
+  }
 }
 
 /* ------------------------------- settings ----------------------------- */

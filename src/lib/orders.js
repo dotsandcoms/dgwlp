@@ -1,4 +1,4 @@
-import { browserClient, hasSupabase } from "./supabase";
+import { browserClient, hasSupabase, imageUrl } from "./supabase";
 
 const STATUS_LABEL = {
   pending: "Processing",
@@ -8,6 +8,56 @@ const STATUS_LABEL = {
   cancelled: "Cancelled",
   refunded: "Refunded",
 };
+
+/** Deterministic placeholder gradient when a product image is missing. */
+function gradFor(name = "") {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return { grad: ["#2f2f2d", "#a9a49b"], angle: (h % 90) + 90 };
+}
+
+/**
+ * Attach product hero images (and ratio) to order lines by matching product_name.
+ * Order items historically only stored the name — without this, Plate shows placeholders.
+ */
+export async function enrichOrdersWithImages(sb, orders) {
+  const names = [
+    ...new Set(
+      orders.flatMap((o) => (o.lines || []).map((l) => l.name).filter(Boolean))
+    ),
+  ];
+  if (!names.length) return orders;
+
+  const { data: products, error } = await sb
+    .from("products")
+    .select("name,ratio_id,colour,hero_image")
+    .in("name", names);
+
+  if (error || !products?.length) return orders;
+
+  const byName = new Map(
+    products.map((p) => [String(p.name || "").trim().toLowerCase(), p])
+  );
+
+  return orders.map((order) => ({
+    ...order,
+    lines: (order.lines || []).map((line) => {
+      if (line.image) return line;
+      const p = byName.get(String(line.name || "").trim().toLowerCase());
+      if (!p) return line;
+      const g = gradFor(line.name);
+      return {
+        ...line,
+        image: imageUrl(p.hero_image),
+        ratio: p.ratio_id || line.ratio || "landscape",
+        // keep the ordered print colour; fall back to catalogue colour
+        colour: line.colour || p.colour || "bw",
+        grad: line.grad || g.grad,
+        angle: line.angle || g.angle,
+      };
+    }),
+  }));
+}
 
 /**
  * Persist a checkout order + line items to Supabase.
@@ -95,7 +145,8 @@ export async function fetchMyOrders() {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data || []).map((row) => mapDbOrder(row));
+  const mapped = (data || []).map((row) => mapDbOrder(row));
+  return enrichOrdersWithImages(sb, mapped);
 }
 
 function mapDbOrder(row, cartItems) {
@@ -103,28 +154,34 @@ function mapDbOrder(row, cartItems) {
   const dbLines = row.order_items || [];
 
   const lines = fromCart
-    ? fromCart.map((i) => ({
-        name: i.name || i.product?.name || "Print",
-        summary: i.summary || "",
-        qty: i.qty || 1,
-        price: i.price || 0,
-        colour: i.printColour || i.product?.colour || "bw",
-        ratio: i.product?.ratio || "landscape",
-        image: i.product?.image || null,
-        grad: i.product?.grad || ["#333", "#9a9a97"],
-        angle: i.product?.angle || 120,
-      }))
-    : dbLines.map((i) => ({
-        name: i.product_name,
-        summary: [i.material_id, i.size_id, i.frame_colour_id].filter(Boolean).join(" · "),
-        qty: i.qty || 1,
-        price: (i.unit_price_cents || 0) / 100,
-        colour: i.colour || "bw",
-        ratio: "landscape",
-        image: null,
-        grad: ["#333", "#9a9a97"],
-        angle: 120,
-      }));
+    ? fromCart.map((i) => {
+        const g = gradFor(i.name || i.product?.name);
+        return {
+          name: i.name || i.product?.name || "Print",
+          summary: i.summary || "",
+          qty: i.qty || 1,
+          price: i.price || 0,
+          colour: i.printColour || i.product?.colour || "bw",
+          ratio: i.product?.ratio || "landscape",
+          image: i.product?.image || i.image || null,
+          grad: i.product?.grad || g.grad,
+          angle: i.product?.angle || g.angle,
+        };
+      })
+    : dbLines.map((i) => {
+        const g = gradFor(i.product_name);
+        return {
+          name: i.product_name,
+          summary: [i.material_id, i.size_id, i.frame_colour_id].filter(Boolean).join(" · "),
+          qty: i.qty || 1,
+          price: (i.unit_price_cents || 0) / 100,
+          colour: i.colour || "bw",
+          ratio: "landscape",
+          image: null,
+          grad: g.grad,
+          angle: g.angle,
+        };
+      });
 
   const pay =
     row.payment_provider === "paystack" ? "Paystack"
@@ -149,6 +206,7 @@ function mapDbOrder(row, cartItems) {
     lines,
     // keep cart-shaped fields for success page / email
     items: fromCart || lines,
-    email: undefined,
+    email: row.email || undefined,
+    shippingMethod: row.shipping_method || null,
   };
 }

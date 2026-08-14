@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings, Star } from "lucide-react";
+import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings, Star, X } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, ROOMS, CATEGORY_NAMES, rangeOf, artPlacement } from "@/lib/pricing";
 import { MOCK_PRODUCTS, MOCK_ORDERS, SALES } from "@/lib/mock";
@@ -11,6 +11,7 @@ import * as db from "@/lib/admin-data";
 import { Plate, Scene, artworkStyle, Pill, StatusBadge } from "./primitives";
 import { LiveSettings, DemoSettings } from "./admin-settings";
 import { LiveFeatured, DemoFeatured } from "./admin-featured";
+import { LiveOrders } from "./admin-orders";
 import { NotFoundView } from "./not-found";
 import { useToast, useAuth, useAuthModal } from "@/context/providers";
 import { adminPath } from "@/lib/admin-path";
@@ -115,7 +116,7 @@ function LiveAdminApp() {
       {loading ? (
         <div className="py-24 flex items-center justify-center gap-2 text-neutral-500 text-[14px]"><Loader2 size={16} className="animate-spin" /> Loading…</div>
       ) : (<>
-        {view === "dashboard" && <LiveDash products={products} orders={orders} />}
+        {view === "dashboard" && <LiveDash products={products} orders={orders} onChanged={reloadOrders} toast={toast} />}
         {view === "products" && <LiveProducts products={products} categories={categories} onEdit={openEditor} onDeleted={reloadProducts} toast={toast} />}
         {view === "featured" && <LiveFeatured products={products} toast={toast} />}
         {view === "editor" && <LiveEditor editingId={editingId} categories={categories} toast={toast} onSaved={() => { reloadProducts(); setView("products"); }} />}
@@ -127,7 +128,7 @@ function LiveAdminApp() {
   );
 }
 
-function LiveDash({ products, orders }) {
+function LiveDash({ products, orders, onChanged, toast }) {
   const settled = orders.filter((o) => ["paid", "shipped", "delivered"].includes(o.status));
   const revenue = settled.reduce((n, o) => n + o.total_cents, 0) / 100;
   const avg = settled.length ? revenue / settled.length : 0;
@@ -142,7 +143,7 @@ function LiveDash({ products, orders }) {
       </div>
       <div className="p-5 rounded-lg" style={{ border: `1px solid ${C.line}` }}>
         <h3 className="text-[15px] mb-3" style={{ fontFamily: HEAD }}>Recent orders</h3>
-        <LiveOrders orders={orders.slice(0, 6)} compact />
+        <LiveOrders orders={orders.slice(0, 6)} compact onChanged={onChanged} toast={toast} />
       </div>
     </div>
   );
@@ -256,39 +257,6 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
           )}
         </>
       )}
-    </div>
-  );
-}
-
-function LiveOrders({ orders, compact, onChanged, toast }) {
-  const STATUSES = ["pending", "paid", "shipped", "delivered", "cancelled", "refunded"];
-  const [busyId, setBusyId] = useState(null);
-  const changeStatus = async (o, status) => {
-    setBusyId(o.id);
-    try { await db.updateOrderStatus(o.id, status); toast(`Order ${o.order_no} marked ${status}`); onChanged?.(); } catch (e) { toast(friendlyError(e, "Update failed")); } finally { setBusyId(null); }
-  };
-  if (orders.length === 0) return <p className="text-[14px] text-neutral-500 py-8 text-center">No orders yet.</p>;
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-[14px]" style={{ minWidth: 620 }}>
-        {!compact && <thead><tr className="text-left text-neutral-500 text-[12px]" style={{ borderBottom: `1px solid ${C.line}` }}>{["ORDER", "DATE", "ITEMS", "TOTAL", "STATUS"].map((h) => <th key={h} className="py-3 font-normal">{h}</th>)}</tr></thead>}
-        <tbody>{orders.map((o) => (
-          <tr key={o.id} style={{ borderBottom: `1px solid ${C.line}` }}>
-            <td className="py-3" style={{ fontFamily: HEAD }}>{o.order_no}</td>
-            <td className="text-neutral-600">{new Date(o.created_at).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })}</td>
-            <td className="text-neutral-600">{o.item_count} item{o.item_count === 1 ? "" : "s"}</td>
-            <td>{zar(o.total_cents / 100)}</td>
-            <td>
-              {compact || !onChanged ? <StatusBadge s={o.status} /> : (
-                <div className="relative inline-block">
-                  <select value={o.status} disabled={busyId === o.id} onChange={(e) => changeStatus(o, e.target.value)} className="text-[12px] py-1 pl-2 pr-6 rounded-full appearance-none outline-none" style={{ border: `1px solid ${C.line}`, fontFamily: HEAD }}>
-                    {STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-                  </select>
-                </div>
-              )}
-            </td>
-          </tr>))}</tbody>
-      </table>
     </div>
   );
 }
@@ -515,7 +483,7 @@ function DemoAdminApp() {
       {view === "products" && <DemoProducts onEdit={() => setView("editor")} />}
       {view === "featured" && <DemoFeatured toast={toast} />}
       {view === "editor" && <DemoEditor toast={toast} />}
-      {view === "orders" && <DemoOrders />}
+      {view === "orders" && <DemoOrders toast={toast} />}
       {view === "categories" && <DemoCategories toast={toast} />}
       {view === "settings" && <DemoSettings toast={toast} />}
     </div>
@@ -545,7 +513,7 @@ function DemoDash() {
           </ResponsiveContainer>
         </div>
       </div>
-      <div className="p-5 rounded-lg" style={{ border: `1px solid ${C.line}` }}><h3 className="text-[15px] mb-3" style={{ fontFamily: HEAD }}>Recent orders</h3><DemoOrders compact /></div>
+      <div className="p-5 rounded-lg" style={{ border: `1px solid ${C.line}` }}><h3 className="text-[15px] mb-3" style={{ fontFamily: HEAD }}>Recent orders</h3><DemoOrders compact toast={toast} /></div>
     </div>
   );
 }
@@ -568,18 +536,105 @@ function DemoProducts({ onEdit }) {
     </div>
   );
 }
-function DemoOrders({ compact }) {
+function DemoOrders({ compact, toast }) {
+  const [rows, setRows] = useState(MOCK_ORDERS);
+  const [selected, setSelected] = useState(null);
+  const [status, setStatus] = useState("pending");
+  const [tracking, setTracking] = useState("");
+
+  const open = (o) => {
+    setSelected(o);
+    setStatus(String(o.status || "Processing").toLowerCase());
+    setTracking(o.tracking || "");
+  };
+
+  const save = () => {
+    if (!selected) return;
+    setRows((prev) => prev.map((o) => (
+      o.id === selected.id
+        ? { ...o, status: status[0].toUpperCase() + status.slice(1), tracking: tracking || null }
+        : o
+    )));
+    toast?.(`Order ${selected.id} updated (demo)`);
+    setSelected(null);
+  };
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-[14px]" style={{ minWidth: 560 }}>
-        {!compact && <thead><tr className="text-left text-neutral-500 text-[12px]" style={{ borderBottom: `1px solid ${C.line}` }}>{["ORDER", "DATE", "ITEMS", "TOTAL", "STATUS"].map((h) => <th key={h} className="py-3 font-normal">{h}</th>)}</tr></thead>}
-        <tbody>{MOCK_ORDERS.map((o) => (
-          <tr key={o.id} style={{ borderBottom: `1px solid ${C.line}` }}>
-            <td className="py-3" style={{ fontFamily: HEAD }}>{o.id}</td><td className="text-neutral-600">{o.date}</td>
-            <td className="text-neutral-600">{o.itemsSummary || o.items}</td><td>{zar(o.total)}</td><td><StatusBadge s={o.status} /></td>
-          </tr>))}</tbody>
-      </table>
-    </div>
+    <>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[14px]" style={{ minWidth: 560 }}>
+          {!compact && (
+            <thead>
+              <tr className="text-left text-neutral-500 text-[12px]" style={{ borderBottom: `1px solid ${C.line}` }}>
+                {["ORDER", "DATE", "ITEMS", "TOTAL", "STATUS", ""].map((h) => <th key={h || "x"} className="py-3 font-normal">{h}</th>)}
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {rows.map((o) => (
+              <tr
+                key={o.id}
+                onClick={() => open(o)}
+                className="cursor-pointer hover:bg-black/[0.02]"
+                style={{ borderBottom: `1px solid ${C.line}` }}
+              >
+                <td className="py-3" style={{ fontFamily: HEAD }}>{o.id}</td>
+                <td className="text-neutral-600">{o.date}</td>
+                <td className="text-neutral-600">{o.itemCount || o.lines?.length || 1} item{(o.itemCount || o.lines?.length || 1) === 1 ? "" : "s"}</td>
+                <td>{zar(o.total)}</td>
+                <td><StatusBadge s={o.status} /></td>
+                {!compact && <td className="text-right text-neutral-400"><ChevronRight size={16} className="inline-block" /></td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {selected && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true">
+          <div className="absolute inset-0" style={{ background: "rgba(20,20,18,.55)" }} onClick={() => setSelected(null)} />
+          <div className="relative w-full sm:max-w-[640px] max-h-[92vh] bg-white flex flex-col overflow-hidden sm:rounded-2xl rounded-t-2xl" style={{ boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
+            <div className="px-6 pt-5 pb-4 flex justify-between" style={{ borderBottom: `1px solid ${C.line}`, background: `linear-gradient(180deg, ${C.greenSoft}, #fff 88%)` }}>
+              <div>
+                <p className="text-[11px] tracking-[.2em] mb-1" style={{ fontFamily: HEAD, color: C.green }}>ORDER DETAIL</p>
+                <h2 className="text-[26px] leading-none" style={{ fontFamily: HEAD, fontWeight: 300 }}>{selected.id}</h2>
+                <p className="text-[13px] text-neutral-500 mt-2">{selected.date} · {selected.itemCount || selected.lines?.length || 0} items</p>
+              </div>
+              <button type="button" onClick={() => setSelected(null)} aria-label="Close" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5"><X size={18} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+              <div className="p-4 space-y-3" style={{ background: "#faf9f6", borderRadius: 8 }}>
+                <label className="block">
+                  <span className="block text-[11px] tracking-[.08em] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>STATUS</span>
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full py-2.5 px-3 text-[14px] outline-none bg-white" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>
+                    {["pending", "paid", "shipped", "delivered", "cancelled", "refunded"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="block text-[11px] tracking-[.08em] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>TRACKING</span>
+                  <input value={tracking} onChange={(e) => setTracking(e.target.value)} className="w-full py-2.5 px-3 text-[14px] outline-none bg-white" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} placeholder="Tracking number" />
+                </label>
+              </div>
+              <div className="space-y-3">
+                {(selected.lines || []).map((line, i) => (
+                  <div key={i} className="flex gap-3 p-3" style={{ background: "#faf9f6", borderRadius: 6 }}>
+                    <Plate product={line} showSig={false} style={{ width: 64, height: 64, borderRadius: 4, flexShrink: 0 }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[14px]" style={{ fontFamily: HEAD }}>{line.name}</div>
+                      <div className="text-[12px] text-neutral-500">{line.summary}</div>
+                    </div>
+                    <div style={{ fontFamily: HEAD }}>{zar(line.price * (line.qty || 1))}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="px-6 py-4 flex justify-between" style={{ borderTop: `1px solid ${C.line}` }}>
+              <button type="button" onClick={() => setSelected(null)} className="text-[13px] text-neutral-500">Close</button>
+              <Pill onClick={save}>Save changes</Pill>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 function DemoCategories({ toast }) {

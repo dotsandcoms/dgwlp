@@ -2,9 +2,58 @@ import { NextResponse } from "next/server";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { isAllowedOrigin, looksLikeEmail, scrubText } from "@/lib/security";
 
-// POST /api/email  { type: 'receipt'|'shipping', order }
+const STATUS_COPY = {
+  receipt: {
+    subject: (id) => `Order confirmed — ${id}`,
+    intro: (id) => `Thank you for your order <b>${id}</b>.`,
+    footer: "We'll email tracking as soon as your print ships.",
+  },
+  pending: {
+    subject: (id) => `Order received — ${id}`,
+    intro: (id) => `We've received your order <b>${id}</b> and are preparing it.`,
+    footer: "We'll email you when payment is confirmed.",
+  },
+  paid: {
+    subject: (id) => `Payment received — ${id}`,
+    intro: (id) => `Payment for order <b>${id}</b> is confirmed. We're preparing your prints.`,
+    footer: "You'll get another email with tracking once your order ships.",
+  },
+  shipping: {
+    subject: (id) => `Your order ${id} has shipped`,
+    intro: (id) => `Good news — order <b>${id}</b> is on its way.`,
+    footer: "Keep an eye out for your courier.",
+  },
+  shipped: {
+    subject: (id) => `Your order ${id} has shipped`,
+    intro: (id) => `Good news — order <b>${id}</b> is on its way.`,
+    footer: "Keep an eye out for your courier.",
+  },
+  delivered: {
+    subject: (id) => `Delivered — ${id}`,
+    intro: (id) => `Your order <b>${id}</b> has been marked as delivered.`,
+    footer: "We hope you enjoy your print. Thank you for supporting the work.",
+  },
+  cancelled: {
+    subject: (id) => `Order cancelled — ${id}`,
+    intro: (id) => `Order <b>${id}</b> has been cancelled.`,
+    footer: "If you have questions, reply to this email and we'll help.",
+  },
+  refunded: {
+    subject: (id) => `Refund processed — ${id}`,
+    intro: (id) => `A refund for order <b>${id}</b> has been processed.`,
+    footer: "Allow a few business days for it to appear on your statement.",
+  },
+};
+
+function resolveType(raw) {
+  const t = String(raw || "receipt").toLowerCase();
+  if (STATUS_COPY[t]) return t;
+  return "receipt";
+}
+
+// POST /api/email  { type: 'receipt'|'pending'|'paid'|'shipped'|'shipping'|'delivered'|'cancelled'|'refunded', order }
 // Sends a transactional email via Resend. No-ops (200) if RESEND_API_KEY
-// is not set, so the checkout flow works in demo mode without failing.
+// is not set, so checkout / admin status updates work without failing.
 export async function POST(req) {
   try {
     if (!isAllowedOrigin(req)) {
@@ -18,7 +67,7 @@ export async function POST(req) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const type = body.type === "shipping" ? "shipping" : "receipt";
+    const type = resolveType(body.type);
     const order = body.order;
     if (!order || typeof order !== "object") {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
@@ -34,6 +83,7 @@ export async function POST(req) {
     if (!key) return NextResponse.json({ skipped: true });
 
     const orderId = scrubText(String(order.id || ""), 40) || "order";
+    const tracking = scrubText(String(order.tracking || ""), 80);
     const rand = (n) => "R" + Number(n || 0).toLocaleString("en-ZA");
     const items = Array.isArray(order.items) ? order.items.slice(0, 50) : [];
     const rows = items
@@ -46,16 +96,20 @@ export async function POST(req) {
       })
       .join("");
 
-    const subject = type === "shipping"
-      ? `Your order ${orderId} has shipped`
-      : `Order confirmed — ${orderId}`;
+    const copy = STATUS_COPY[type];
+    const trackingLine = tracking
+      ? `<p style="font-size:14px">Tracking: <b>${escapeHtml(tracking)}</b></p>`
+      : "";
+
+    const subject = copy.subject(orderId);
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto">
         <h2 style="letter-spacing:1px">DORON GOLDSTEIN <span style="color:#556B2F">PHOTOGRAPHY</span></h2>
-        <p>Thank you for your order <b>${escapeHtml(orderId)}</b>.</p>
+        <p>${copy.intro(escapeHtml(orderId))}</p>
+        ${trackingLine}
         <table style="width:100%;font-size:14px;border-top:1px solid #eee;margin-top:8px">${rows}</table>
         <p style="text-align:right;font-weight:bold">Total: ${rand(order.total)}</p>
-        <p style="color:#666;font-size:12px">We'll email tracking as soon as your print ships.</p>
+        <p style="color:#666;font-size:12px">${escapeHtml(copy.footer)}</p>
       </div>`;
 
     const res = await fetch("https://api.resend.com/emails", {

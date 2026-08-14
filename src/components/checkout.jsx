@@ -122,7 +122,7 @@ export function CheckoutFlow() {
         subtotal: cart.subtotal,
         shipping: shipCost,
         total,
-        delivery: { ...(addr || {}), destination: "za" },
+        delivery: { ...(addr || {}), destination: "za", name: user.name || "", phone: user.phone || "" },
         pay,
         shipMethod: ship,
       });

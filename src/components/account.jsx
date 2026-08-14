@@ -39,16 +39,16 @@ export function AuthView() {
 /** Normalise a checkout localStorage order into the account order shape. */
 function fromLastOrder(raw) {
   if (!raw?.id) return null;
-  const lines = (raw.items || []).map((i) => ({
+  const lines = (raw.items || raw.lines || []).map((i) => ({
     name: i.name || i.product?.name || "Print",
     summary: i.summary || "",
     qty: i.qty || 1,
     price: i.price || 0,
-    colour: i.product?.colour || "bw",
-    ratio: i.product?.ratio || "landscape",
-    image: i.product?.image || null,
-    grad: i.product?.grad || ["#333", "#9a9a97"],
-    angle: i.product?.angle || 120,
+    colour: i.printColour || i.colour || i.product?.colour || "bw",
+    ratio: i.ratio || i.product?.ratio || "landscape",
+    image: i.image || i.product?.image || null,
+    grad: i.grad || i.product?.grad || ["#333", "#9a9a97"],
+    angle: i.angle || i.product?.angle || 120,
   }));
   return {
     id: raw.id,

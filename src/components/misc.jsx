@@ -66,7 +66,7 @@ export function About() {
           <div className="md:col-span-5">
             <Reveal>
               <div className="overflow-hidden" style={{ borderRadius: 4 }}>
-                <Plate product={portrait} showSig style={{ width: "100%", aspectRatio: "3/4" }} />
+                <Plate product={portrait} showSig={false} style={{ width: "100%", aspectRatio: "3/4" }} />
               </div>
             </Reveal>
           </div>
@@ -282,7 +282,6 @@ export function Contact() {
             <Reveal delay={200}>
               <div className="space-y-6">
                 {[
-                  { label: "Email", value: "orders@dgwlp.co.za", href: "mailto:orders@dgwlp.co.za" },
                   { label: "Studio", value: "Johannesburg, South Africa" },
                   { label: "Orders", value: "Archival paper & canvas · SA courier · international quoted" },
                 ].map((item) => (

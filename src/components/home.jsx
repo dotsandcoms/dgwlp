@@ -2,24 +2,24 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
-import { C, HEAD, rangeOf } from "@/lib/pricing";
+import { C, HEAD, RATIOS, rangeOf } from "@/lib/pricing";
 import { siteImage } from "@/lib/supabase";
-import { formatMoney } from "@/lib/settings";
-import { usePublicSettings } from "@/lib/use-public-settings";
+import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { Plate, Parallax, Reveal, Pill } from "./primitives";
 
 export function Card({ p }) {
-  const { currency } = usePublicSettings();
+  const { moneyRange } = useDisplayCurrency();
   const [min, max] = rangeOf(p);
+  const isPano = p.ratio === "pano" || p.ratio === "pan2";
+  const cardAr = isPano ? (RATIOS[p.ratio]?.ar || "3 / 1") : "1 / 1";
   return (
     <div className="group text-center">
       <Link href={`/product/${p.slug}`} className="block w-full overflow-hidden">
-        <Plate product={p} style={{ width: "100%", aspectRatio: "1/1", transition: "transform .6s" }} className="group-hover:scale-[1.05]" />
+        <Plate product={p} style={{ width: "100%", aspectRatio: cardAr, transition: "transform .6s" }} className="group-hover:scale-[1.05]" />
       </Link>
       <div className="mt-4 text-[16px]" style={{ fontFamily: HEAD }}>{p.name}</div>
       <div className="text-[14px] text-neutral-600 mt-1">
-        {formatMoney(min, currency)}
-        {max !== min ? ` – ${formatMoney(max, currency)}` : ""}
+        {moneyRange(min, max)}
       </div>
       <div className="mt-3"><Link href={`/product/${p.slug}`}><Pill variant="outline" size="sm">Select options</Pill></Link></div>
     </div>
@@ -157,14 +157,12 @@ function onePerCategory(products) {
 }
 
 const TRUST_LINES = [
-  "Signed, limited-edition prints",
-  "Archival paper & canvas",
-  "Shipped nationwide",
+  "Shipped locally across South Africa and internationally",
 ];
 
 const HOW_STEPS = [
   { n: "01", title: "Choose your print", body: "Browse the collection and find the frame that belongs on your wall." },
-  { n: "02", title: "Size & finish", body: "Select paper or canvas, framing, and colour or black & white where offered." },
+  { n: "02", title: "Size & finish", body: "Select paper or canvas, framing, and the size that suits your space." },
   { n: "03", title: "Delivered to you", body: "Archival production and careful packing — couriered across South Africa." },
 ];
 
@@ -198,11 +196,11 @@ export function Home({ products, featured = [] }) {
           </Reveal>
           <Reveal delay={240}>
             <div className="flex items-center justify-center gap-2 sm:gap-4 my-5 sm:my-6 max-w-full px-1">
-              <span className="hidden sm:block shrink-0" style={{ width: 40, height: 1, background: C.green }} />
-              <span className="text-[11px] sm:text-[17px] tracking-[.12em] sm:tracking-[.25em]" style={{ fontFamily: HEAD, color: C.green }}>
+              <span className="hidden sm:block shrink-0" style={{ width: 40, height: 1, background: "rgba(255,255,255,.85)" }} />
+              <span className="text-[11px] sm:text-[17px] tracking-[.12em] sm:tracking-[.25em] text-white" style={{ fontFamily: HEAD }}>
                 WILDLIFE PHOTOGRAPHY
               </span>
-              <span className="hidden sm:block shrink-0" style={{ width: 40, height: 1, background: C.green }} />
+              <span className="hidden sm:block shrink-0" style={{ width: 40, height: 1, background: "rgba(255,255,255,.85)" }} />
             </div>
           </Reveal>
           <Reveal delay={360}>
@@ -219,7 +217,7 @@ export function Home({ products, featured = [] }) {
         <div className="max-w-[1240px] mx-auto px-5 pt-10 sm:pt-12 pb-12 sm:pb-16">
           <Reveal>
             <p className="text-center text-[15px] sm:text-[18px] leading-relaxed text-neutral-700 max-w-[640px] mx-auto mb-8 sm:mb-10" style={{ fontFamily: HEAD, fontWeight: 300 }}>
-              Over sixty years behind the lens in the Kruger, Kgalagadi and Timbivati — every frame a window into the animal world, printed to last a lifetime.
+              Over visiting the Kruger, Kgalagadi and Timbivati — every frame a window into the animal world, printed to last a lifetime.
             </p>
           </Reveal>
 
@@ -269,8 +267,7 @@ export function Home({ products, featured = [] }) {
             <div className="flex flex-wrap items-end justify-between gap-3 mb-8 sm:mb-10">
               <Reveal>
                 <div>
-                  <p className="text-[11px] tracking-[.22em] mb-1.5" style={{ fontFamily: HEAD, color: C.green }}>NEW & FEATURED</p>
-                  <h2 className="text-[26px] sm:text-[34px] leading-none" style={{ fontFamily: HEAD, fontWeight: 300 }}>Prints to start with</h2>
+                  <p className="text-[11px] tracking-[.22em] mb-1.5" style={{ fontFamily: HEAD, color: C.green }}>FEATURED PRINTS</p>
                 </div>
               </Reveal>
               <Reveal delay={60}>

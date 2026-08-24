@@ -18,8 +18,10 @@ export const DEFAULT_SETTINGS = {
     label: "VAT",
   },
   currency: {
-    showUsd: false,
+    // ZAR per 1 unit of foreign currency (manual rates for approximate display)
     zarPerUsd: 18.5,
+    zarPerEur: 20,
+    zarPerGbp: 23.5,
   },
   payfast: {
     merchantId: "",
@@ -28,6 +30,14 @@ export const DEFAULT_SETTINGS = {
     sandbox: true,
   },
 };
+
+/** Shopper-facing display currencies. Checkout/PayFast remain ZAR. */
+export const DISPLAY_CURRENCIES = [
+  { code: "ZAR", label: "ZAR", symbol: "R" },
+  { code: "USD", label: "USD", symbol: "$", rateKey: "zarPerUsd" },
+  { code: "EUR", label: "EUR", symbol: "€", rateKey: "zarPerEur" },
+  { code: "GBP", label: "GBP", symbol: "£", rateKey: "zarPerGbp" },
+];
 
 export function mergeSettings(partial = {}) {
   return {
@@ -124,15 +134,33 @@ export function framedCartItems(items = []) {
   return (items || []).filter((i) => isFramedMaterial(i.material));
 }
 
-/** ZAR display, optionally with approximate USD. */
-export function formatMoney(amountZar, currency) {
-  const base = zar(amountZar);
+function currencyMeta(code) {
+  return DISPLAY_CURRENCIES.find((c) => c.code === code) || DISPLAY_CURRENCIES[0];
+}
+
+/**
+ * Format a ZAR amount in a single display currency (no dual ZAR · ~$xx).
+ * @param {number} amountZar
+ * @param {object} currency settings (rates)
+ * @param {"ZAR"|"USD"|"EUR"|"GBP"} [displayCode="ZAR"]
+ */
+export function formatMoney(amountZar, currency, displayCode = "ZAR") {
   const cfg = { ...DEFAULT_SETTINGS.currency, ...(currency || {}) };
-  if (!cfg.showUsd) return base;
-  const rate = Number(cfg.zarPerUsd) || 0;
-  if (rate <= 0) return base;
-  const usd = Math.round((Number(amountZar) || 0) / rate);
-  return `${base} · ~$${usd.toLocaleString("en-US")}`;
+  const meta = currencyMeta(displayCode);
+  if (!meta.rateKey) return zar(amountZar);
+
+  const rate = Number(cfg[meta.rateKey]) || 0;
+  if (rate <= 0) return zar(amountZar);
+  const converted = Math.round((Number(amountZar) || 0) / rate);
+  return `${meta.symbol}${converted.toLocaleString("en-US")}`;
+}
+
+/** Clean min–max range in one currency, e.g. "$88 – $441". */
+export function formatMoneyRange(minZar, maxZar, currency, displayCode = "ZAR") {
+  const a = Number(minZar) || 0;
+  const b = Number(maxZar) || 0;
+  if (a === b) return formatMoney(a, currency, displayCode);
+  return `${formatMoney(a, currency, displayCode)} – ${formatMoney(b, currency, displayCode)}`;
 }
 
 /** Mask secrets for admin UI display. */

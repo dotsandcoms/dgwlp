@@ -5,8 +5,8 @@ import { Header, Footer, CartDrawer, Toaster } from "@/components/chrome";
 import { AuthModal } from "@/components/auth-modal";
 
 export const metadata = {
-  title: "Doron Goldstein Photography — Limited Edition Wildlife Prints",
-  description: "Signed, limited-edition fine-art wildlife photographs by Doron Goldstein. Printed on archival paper and canvas, shipped across South Africa.",
+  title: "Doron Goldstein Photography — Wildlife Prints",
+  description: "Wildlife photographs by Doron Goldstein. Shipped locally across South Africa and internationally.",
 };
 
 export default function RootLayout({ children }) {

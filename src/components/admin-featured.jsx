@@ -119,7 +119,8 @@ export function LiveFeatured({ products = [], toast }) {
               >
                 <span className="text-[12px] text-neutral-400 w-5 shrink-0" style={{ fontFamily: HEAD }}>{i + 1}</span>
                 <Plate
-                  product={{ image: imageUrl(p.hero_image), colour: p.colour === "both" ? "colour" : p.colour, name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }}
+                  product={{ image: imageUrl(p.hero_image), colour: "colour", name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }}
+                  printColour="colour"
                   showSig={false}
                   style={{ width: 48, height: 48, borderRadius: 3, flexShrink: 0 }}
                 />
@@ -171,7 +172,8 @@ export function LiveFeatured({ products = [], toast }) {
                 style={{ border: `1px solid ${C.line}`, borderRadius: 6 }}
               >
                 <Plate
-                  product={{ image: imageUrl(p.hero_image), colour: p.colour === "both" ? "colour" : p.colour, name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }}
+                  product={{ image: imageUrl(p.hero_image), colour: "colour", name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }}
+                  printColour="colour"
                   showSig={false}
                   style={{ width: 44, height: 44, borderRadius: 3, flexShrink: 0 }}
                 />

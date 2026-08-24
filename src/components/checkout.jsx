@@ -15,8 +15,8 @@ import {
   shippingCost,
   internationalShippingNote,
   framedCartItems,
-  formatMoney,
 } from "@/lib/settings";
+import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { useCart, useAuth, useToast } from "@/context/providers";
 import { friendlyError } from "@/lib/errors";
 import { placeOrder } from "@/lib/orders";
@@ -41,6 +41,7 @@ export function CheckoutFlow() {
   const { user, register, login, updateProfile } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+  const { money, isForeign, code } = useDisplayCurrency();
 
   const [step, setStep] = useState(1);
   const [authTab, setAuthTab] = useState("register");
@@ -79,7 +80,6 @@ export function CheckoutFlow() {
   );
   const { shipping: shipCost, tax: taxCost, total, taxLabel, taxEnabled, shippingQuoted } = totals;
   const steps = ["Account", "Delivery", "Payment"];
-  const money = (n) => formatMoney(n, storeSettings.currency);
 
   /** Persist delivery (including notes) to the signed-in profile. */
   const saveDeliveryToProfile = async (delivery) => {
@@ -263,10 +263,15 @@ export function CheckoutFlow() {
           ))}
           <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
             <Row l="Subtotal" v={money(cart.subtotal)} />
-            <Row l="Shipping" v={step >= 2 ? (shippingQuoted ? "Quoted" : (shipCost === 0 ? "Free" : zar(shipCost))) : "—"} />
-            {taxEnabled && step >= 2 && !shippingQuoted && <Row l={`${taxLabel} (${storeSettings.tax.ratePct}%)`} v={zar(taxCost)} />}
+            <Row l="Shipping" v={step >= 2 ? (shippingQuoted ? "Quoted" : (shipCost === 0 ? "Free" : money(shipCost))) : "—"} />
+            {taxEnabled && step >= 2 && !shippingQuoted && <Row l={`${taxLabel} (${storeSettings.tax.ratePct}%)`} v={money(taxCost)} />}
             <div className="mt-2" />
             <Row l="Total" v={shippingQuoted ? `${money(cart.subtotal)} + shipping` : money(step >= 2 ? total : cart.subtotal)} bold />
+            {isForeign && step >= 2 && !shippingQuoted && (
+              <p className="text-[11px] text-neutral-500 mt-2">
+                Approximate {code}. You&apos;ll be charged {zar(total)}.
+              </p>
+            )}
           </div>
         </div>
       </div>

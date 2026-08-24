@@ -50,6 +50,14 @@ export async function createCategory(name) {
   if (error) throw error;
 }
 
+export async function updateCategory(id, name) {
+  const sb = browserClient();
+  const trimmed = (name || "").trim();
+  if (!trimmed) throw new Error("Category name is required");
+  const { error } = await sb.from("categories").update({ name: trimmed, slug: slugify(trimmed) }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteCategory(id) {
   const sb = browserClient();
   const { error } = await sb.from("categories").delete().eq("id", id);
@@ -132,6 +140,17 @@ export async function deleteProduct(id) {
   const sb = browserClient();
   const { error } = await sb.from("products").delete().eq("id", id);
   if (error) throw error;
+}
+
+/** Move many products into one category in a single update. */
+export async function bulkUpdateProductCategory(ids, categoryId) {
+  const sb = browserClient();
+  const list = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  if (!list.length) throw new Error("Select at least one print");
+  if (!categoryId) throw new Error("Choose a category");
+  const { error } = await sb.from("products").update({ category_id: categoryId }).in("id", list);
+  if (error) throw error;
+  return list.length;
 }
 
 /* --------------------------------- orders ------------------------------ */

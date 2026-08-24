@@ -41,12 +41,13 @@ function LiveAdminGate() {
       setLocalAdmin(false);
       return undefined;
     }
-    setLocalAdmin(null);
+    // Keep prior OK state while re-checking so the console doesn't remount / wipe forms
+    setLocalAdmin((prev) => (prev === true ? true : null));
     db.checkIsAdmin()
       .then((ok) => { if (!cancelled) setLocalAdmin(ok); })
       .catch(() => { if (!cancelled) setLocalAdmin(false); });
     return () => { cancelled = true; };
-  }, [sessionUser]);
+  }, [sessionUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!adminReady || (sessionUser && localAdmin === null)) {
     return <div className="max-w-[1240px] mx-auto px-5 py-24 text-center text-neutral-500 text-[14px] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Checking access…</div>;
@@ -155,6 +156,9 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
   const [query, setQuery] = useState("");
   const [cat, setCat] = useState("All");
   const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const categoryNames = categories.map((c) => c.name);
 
@@ -171,14 +175,68 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageIds = pageItems.map((p) => p.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const somePageSelected = pageIds.some((id) => selected.has(id));
+  const selectedCount = selected.size;
 
   useEffect(() => { setPage(1); }, [query, cat]);
   useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
+  useEffect(() => {
+    setSelected((prev) => {
+      const ids = new Set(products.map((p) => p.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [products]);
+
+  const toggleOne = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const togglePage = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const selectFiltered = () => {
+    setSelected(new Set(filtered.map((p) => p.id)));
+  };
+
+  const clearSelection = () => setSelected(new Set());
 
   const remove = async (p) => {
     if (!window.confirm(`Delete "${p.name}"? This can't be undone.`)) return;
     setBusyId(p.id);
     try { await db.deleteProduct(p.id); toast("Print deleted"); onDeleted(); } catch (e) { toast(friendlyError(e, "Delete failed")); } finally { setBusyId(null); }
+  };
+
+  const moveSelected = async () => {
+    if (!selectedCount) return toast("Select at least one print");
+    if (!bulkCategoryId) return toast("Choose a category");
+    const dest = categories.find((c) => c.id === bulkCategoryId);
+    if (!window.confirm(`Move ${selectedCount} print${selectedCount === 1 ? "" : "s"} to “${dest?.name || "category"}”?`)) return;
+    setBulkBusy(true);
+    try {
+      const n = await db.bulkUpdateProductCategory([...selected], bulkCategoryId);
+      toast(`Moved ${n} print${n === 1 ? "" : "s"} to ${dest?.name || "category"}`);
+      clearSelection();
+      setBulkCategoryId("");
+      onDeleted();
+    } catch (e) {
+      toast(friendlyError(e, "Bulk move failed"));
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
   return (
@@ -187,6 +245,7 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
         <span className="text-[14px] text-neutral-500">
           {filtered.length} of {products.length} prints
           {pageCount > 1 ? ` · page ${safePage}/${pageCount}` : ""}
+          {selectedCount > 0 ? ` · ${selectedCount} selected` : ""}
         </span>
         <Pill size="sm" onClick={() => onEdit(null)}><Plus size={14} /> New print</Pill>
       </div>
@@ -216,6 +275,44 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
         </div>
       </div>
 
+      {selectedCount > 0 && (
+        <div
+          className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5 p-3 rounded-lg"
+          style={{ background: C.greenSoft, border: `1px solid ${C.line}` }}
+        >
+          <span className="text-[13px] shrink-0" style={{ fontFamily: HEAD }}>
+            {selectedCount} selected
+          </span>
+          <div className="relative flex-1 min-w-[180px]">
+            <select
+              value={bulkCategoryId}
+              onChange={(e) => setBulkCategoryId(e.target.value)}
+              className="w-full appearance-none py-2 pl-3 pr-9 text-[14px] outline-none bg-white"
+              style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
+            >
+              <option value="">Move to category…</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <ChevronDown size={15} className="absolute right-3 top-2.5 pointer-events-none text-neutral-400" />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Pill size="sm" onClick={moveSelected} disabled={bulkBusy || !bulkCategoryId}>
+              {bulkBusy ? <Loader2 size={14} className="animate-spin" /> : "Move"}
+            </Pill>
+            {filtered.length > pageIds.length && selectedCount < filtered.length && (
+              <button type="button" onClick={selectFiltered} className="text-[12px] text-neutral-600 hover:opacity-70">
+                Select all {filtered.length} matching
+              </button>
+            )}
+            <button type="button" onClick={clearSelection} className="text-[12px] text-neutral-500 hover:opacity-70">
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       {products.length === 0 ? (
         <p className="text-[14px] text-neutral-500 py-8 text-center">No prints yet — add your first one.</p>
       ) : pageItems.length === 0 ? (
@@ -223,20 +320,63 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full text-[14px]" style={{ minWidth: 700 }}>
-              <thead><tr className="text-left text-neutral-500 text-[12px]" style={{ borderBottom: `1px solid ${C.line}` }}>{["", "NAME", "CATEGORY", "RATIO", "PRICE RANGE", "STATUS", ""].map((h, k) => <th key={k} className="py-3 font-normal">{h}</th>)}</tr></thead>
-              <tbody>{pageItems.map((p) => (
-                <tr key={p.id} style={{ borderBottom: `1px solid ${C.line}` }}>
-                  <td className="py-3"><Plate product={{ image: imageUrl(p.hero_image), colour: p.colour === "both" ? "colour" : p.colour, name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }} showSig={false} style={{ width: 46, height: 46, borderRadius: 3 }} /></td>
-                  <td style={{ fontFamily: HEAD }}>{p.name}</td><td className="text-neutral-600">{p.category_name}</td>
-                  <td className="text-neutral-600">{RATIOS[p.ratio_id]?.label || p.ratio_id}</td>
-                  <td>{p.min_cents ? `${zar(p.min_cents / 100)} – ${zar(p.max_cents / 100)}` : "No prices set"}</td>
-                  <td><span className="text-[11px] px-2 py-1 rounded-full" style={{ background: p.is_published ? `${C.green}18` : "#f2f2f0", color: p.is_published ? C.green : C.gray, fontFamily: HEAD }}>{p.is_published ? "Published" : "Draft"}</span></td>
-                  <td className="whitespace-nowrap">
-                    <button onClick={() => onEdit(p.id)} className="text-neutral-400 hover:text-black mr-3"><Pencil size={15} /></button>
-                    <button onClick={() => remove(p)} disabled={busyId === p.id} className="text-neutral-400 hover:text-red-500">{busyId === p.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}</button>
-                  </td>
-                </tr>))}</tbody>
+            <table className="w-full text-[14px]" style={{ minWidth: 740 }}>
+              <thead>
+                <tr className="text-left text-neutral-500 text-[12px]" style={{ borderBottom: `1px solid ${C.line}` }}>
+                  <th className="py-3 font-normal w-10">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                      onChange={togglePage}
+                      aria-label="Select all on this page"
+                    />
+                  </th>
+                  {["", "NAME", "CATEGORY", "RATIO", "PRICE RANGE", "STATUS", ""].map((h, k) => (
+                    <th key={k} className="py-3 font-normal">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pageItems.map((p) => (
+                  <tr key={p.id} style={{ borderBottom: `1px solid ${C.line}`, background: selected.has(p.id) ? `${C.green}0d` : undefined }}>
+                    <td className="py-3">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(p.id)}
+                        onChange={() => toggleOne(p.id)}
+                        aria-label={`Select ${p.name}`}
+                      />
+                    </td>
+                    <td className="py-3">
+                      <Plate
+                        product={{ image: imageUrl(p.hero_image), colour: "colour", name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }}
+                        printColour="colour"
+                        showSig={false}
+                        style={{ width: 46, height: 46, borderRadius: 3 }}
+                      />
+                    </td>
+                    <td style={{ fontFamily: HEAD }}>{p.name}</td>
+                    <td className="text-neutral-600">{p.category_name}</td>
+                    <td className="text-neutral-600">{RATIOS[p.ratio_id]?.label || p.ratio_id}</td>
+                    <td>{p.min_cents ? `${zar(p.min_cents / 100)} – ${zar(p.max_cents / 100)}` : "No prices set"}</td>
+                    <td>
+                      <span
+                        className="text-[11px] px-2 py-1 rounded-full"
+                        style={{ background: p.is_published ? `${C.green}18` : "#f2f2f0", color: p.is_published ? C.green : C.gray, fontFamily: HEAD }}
+                      >
+                        {p.is_published ? "Published" : "Draft"}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap">
+                      <button onClick={() => onEdit(p.id)} className="text-neutral-400 hover:text-black mr-3"><Pencil size={15} /></button>
+                      <button onClick={() => remove(p)} disabled={busyId === p.id} className="text-neutral-400 hover:text-red-500">
+                        {busyId === p.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
 
@@ -264,10 +404,38 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
 function LiveCategories({ categories, onChanged, toast }) {
   const [val, setVal] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editVal, setEditVal] = useState("");
+  const [savingId, setSavingId] = useState(null);
+
   const add = async () => {
     if (!val.trim()) return;
     setBusy(true);
     try { await db.createCategory(val.trim()); setVal(""); toast("Category added"); onChanged(); } catch (e) { toast(friendlyError(e, "Failed to add category")); } finally { setBusy(false); }
+  };
+  const startEdit = (c) => {
+    setEditingId(c.id);
+    setEditVal(c.name);
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditVal("");
+  };
+  const saveEdit = async (c) => {
+    const next = editVal.trim();
+    if (!next) return toast("Enter a category name");
+    if (next === c.name) { cancelEdit(); return; }
+    setSavingId(c.id);
+    try {
+      await db.updateCategory(c.id, next);
+      toast("Category updated");
+      cancelEdit();
+      onChanged();
+    } catch (e) {
+      toast(friendlyError(e, "Failed to update category"));
+    } finally {
+      setSavingId(null);
+    }
   };
   const remove = async (c) => {
     try { await db.deleteCategory(c.id); toast("Category removed"); onChanged(); } catch (e) { toast(friendlyError(e, "Failed to remove category")); }
@@ -276,8 +444,75 @@ function LiveCategories({ categories, onChanged, toast }) {
     <div className="max-w-[520px]">
       <h3 className="text-[15px] mb-4" style={{ fontFamily: HEAD }}>Photo categories</h3>
       {categories.length === 0 && <p className="text-[13px] text-neutral-500 mb-3">No categories yet.</p>}
-      {categories.map((c) => (<div key={c.id} className="flex items-center justify-between py-3" style={{ borderBottom: `1px solid ${C.line}` }}><span className="text-[14px]">{c.name}</span><button onClick={() => remove(c)} className="text-neutral-400 hover:text-red-500"><Trash2 size={15} /></button></div>))}
-      <div className="flex gap-2 mt-4"><input value={val} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="New category" className="flex-1 py-2.5 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} /><Pill size="sm" onClick={add} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : "Add"}</Pill></div>
+      {categories.map((c) => (
+        <div key={c.id} className="flex items-center justify-between gap-3 py-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+          {editingId === c.id ? (
+            <input
+              autoFocus
+              value={editVal}
+              onChange={(e) => setEditVal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveEdit(c);
+                if (e.key === "Escape") cancelEdit();
+              }}
+              className="flex-1 py-1.5 px-2 text-[14px] outline-none"
+              style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
+            />
+          ) : (
+            <span className="text-[14px] flex-1 min-w-0">{c.name}</span>
+          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {editingId === c.id ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => saveEdit(c)}
+                  disabled={savingId === c.id}
+                  className="text-neutral-500 hover:text-olive p-1"
+                  title="Save"
+                  aria-label="Save category"
+                >
+                  {savingId === c.id ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="text-neutral-400 hover:text-neutral-600 p-1"
+                  title="Cancel"
+                  aria-label="Cancel edit"
+                >
+                  <X size={15} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => startEdit(c)}
+                  className="text-neutral-400 hover:text-olive p-1"
+                  title="Edit"
+                  aria-label={`Edit ${c.name}`}
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(c)}
+                  className="text-neutral-400 hover:text-red-500 p-1"
+                  title="Delete"
+                  aria-label={`Delete ${c.name}`}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+      <div className="flex gap-2 mt-4">
+        <input value={val} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="New category" className="flex-1 py-2.5 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
+        <Pill size="sm" onClick={add} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : "Add"}</Pill>
+      </div>
     </div>
   );
 }
@@ -318,7 +553,7 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
       setName(product.name);
       setCategoryId(product.category_id || "");
       setRatio(product.ratio_id);
-      setColour(product.colour);
+      setColour(product.colour === "bw" ? "bw" : "colour");
       setDesc(product.description || "");
       setExistingImage(product.hero_image || null);
       const es = {}; const pr = {};
@@ -343,7 +578,7 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
   }, [onSizes, onMats, prices]);
 
   const previewImage = file ? URL.createObjectURL(file) : imageUrl(existingImage);
-  const preview = { image: previewImage, grad: colour === "colour" || colour === "both" ? ["#7c5f36", "#d9c39a"] : ["#333", "#9a9a97"], angle: 120, name: name || "New Print", colour: colour === "both" ? "colour" : colour, ratio };
+  const preview = { image: previewImage, grad: colour === "colour" ? ["#7c5f36", "#d9c39a"] : ["#333", "#9a9a97"], angle: 120, name: name || "New Print", colour, ratio };
   const firstRoom = Object.keys(rooms).find((r) => rooms[r]) || "gallery";
 
   const save = async () => {
@@ -398,8 +633,7 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
             <div className="relative"><select value={ratio} onChange={(e) => setRatio(e.target.value)} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{Object.entries(RATIOS).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}</select><ChevronDown size={16} className="absolute right-3 top-3.5 pointer-events-none" /></div>
           </div>
           <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" rows={3} className="w-full py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
-          <div className="flex flex-wrap gap-4 mt-3">{[["bw", "Black & White"], ["colour", "Colour"], ["both", "Both"]].map(([k, l]) => (<label key={k} className="flex items-center gap-2 text-[14px]"><input type="radio" checked={colour === k} onChange={() => setColour(k)} /> {l}</label>))}</div>
-          {colour === "both" && <p className="text-[12px] text-neutral-500 mt-2">Shoppers can choose Black &amp; White or Colour — the same upload is shown with a B&amp;W filter when they pick mono.</p>}
+          <div className="flex flex-wrap gap-4 mt-3">{[["bw", "Black & White"], ["colour", "Colour"]].map(([k, l]) => (<label key={k} className="flex items-center gap-2 text-[14px]"><input type="radio" checked={colour === k} onChange={() => setColour(k)} /> {l}</label>))}</div>
         </div>
         <div>
           <h3 className="text-[15px] mb-1" style={{ fontFamily: HEAD }}>3 · Sizes &amp; finishes — set a price for each</h3>
@@ -638,12 +872,81 @@ function DemoOrders({ compact, toast }) {
   );
 }
 function DemoCategories({ toast }) {
-  const [cats, setCats] = useState(CATEGORY_NAMES); const [val, setVal] = useState("");
+  const [cats, setCats] = useState(CATEGORY_NAMES);
+  const [val, setVal] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [editVal, setEditVal] = useState("");
   return (
     <div className="max-w-[520px]">
       <h3 className="text-[15px] mb-4" style={{ fontFamily: HEAD }}>Photo categories</h3>
-      {cats.map((c) => (<div key={c} className="flex items-center justify-between py-3" style={{ borderBottom: `1px solid ${C.line}` }}><span className="text-[14px]">{c}</span><button onClick={() => { setCats(cats.filter((x) => x !== c)); toast("Category removed"); }} className="text-neutral-400 hover:text-red-500"><Trash2 size={15} /></button></div>))}
-      <div className="flex gap-2 mt-4"><input value={val} onChange={(e) => setVal(e.target.value)} placeholder="New category" className="flex-1 py-2.5 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} /><Pill size="sm" onClick={() => { if (val) { setCats([...cats, val]); setVal(""); toast("Category added"); } }}>Add</Pill></div>
+      {cats.map((c) => (
+        <div key={c} className="flex items-center justify-between gap-3 py-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+          {editing === c ? (
+            <input
+              autoFocus
+              value={editVal}
+              onChange={(e) => setEditVal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && editVal.trim()) {
+                  setCats(cats.map((x) => (x === c ? editVal.trim() : x)));
+                  setEditing(null);
+                  toast("Category updated");
+                }
+                if (e.key === "Escape") setEditing(null);
+              }}
+              className="flex-1 py-1.5 px-2 text-[14px] outline-none"
+              style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
+            />
+          ) : (
+            <span className="text-[14px] flex-1 min-w-0">{c}</span>
+          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {editing === c ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!editVal.trim()) return;
+                    setCats(cats.map((x) => (x === c ? editVal.trim() : x)));
+                    setEditing(null);
+                    toast("Category updated");
+                  }}
+                  className="text-neutral-500 hover:text-olive p-1"
+                  title="Save"
+                >
+                  <Check size={15} />
+                </button>
+                <button type="button" onClick={() => setEditing(null)} className="text-neutral-400 hover:text-neutral-600 p-1" title="Cancel">
+                  <X size={15} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setEditing(c); setEditVal(c); }}
+                  className="text-neutral-400 hover:text-olive p-1"
+                  title="Edit"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCats(cats.filter((x) => x !== c)); toast("Category removed"); }}
+                  className="text-neutral-400 hover:text-red-500 p-1"
+                  title="Delete"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+      <div className="flex gap-2 mt-4">
+        <input value={val} onChange={(e) => setVal(e.target.value)} placeholder="New category" className="flex-1 py-2.5 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
+        <Pill size="sm" onClick={() => { if (val) { setCats([...cats, val]); setVal(""); toast("Category added"); } }}>Add</Pill>
+      </div>
     </div>
   );
 }
@@ -674,7 +977,7 @@ function DemoEditor({ toast }) {
     return vals.length ? [Math.min(...vals), Math.max(...vals)] : [0, 0];
   }, [onSizes, onMats, prices]);
 
-  const preview = { grad: colour === "colour" || colour === "both" ? ["#7c5f36", "#d9c39a"] : ["#333", "#9a9a97"], angle: 120, name: name || "New Print", colour: colour === "both" ? "colour" : colour, ratio };
+  const preview = { grad: colour === "colour" ? ["#7c5f36", "#d9c39a"] : ["#333", "#9a9a97"], angle: 120, name: name || "New Print", colour, ratio };
   const firstRoom = Object.keys(rooms).find((r) => rooms[r]) || "gallery";
 
   return (
@@ -695,8 +998,7 @@ function DemoEditor({ toast }) {
             <div className="relative"><select value={ratio} onChange={(e) => setRatio(e.target.value)} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{Object.entries(RATIOS).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}</select><ChevronDown size={16} className="absolute right-3 top-3.5 pointer-events-none" /></div>
           </div>
           <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" rows={3} className="w-full py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
-          <div className="flex flex-wrap gap-4 mt-3">{[["bw", "Black & White"], ["colour", "Colour"], ["both", "Both"]].map(([k, l]) => (<label key={k} className="flex items-center gap-2 text-[14px]"><input type="radio" checked={colour === k} onChange={() => setColour(k)} /> {l}</label>))}</div>
-          {colour === "both" && <p className="text-[12px] text-neutral-500 mt-2">Shoppers can choose Black &amp; White or Colour — the same upload is shown with a B&amp;W filter when they pick mono.</p>}
+          <div className="flex flex-wrap gap-4 mt-3">{[["bw", "Black & White"], ["colour", "Colour"]].map(([k, l]) => (<label key={k} className="flex items-center gap-2 text-[14px]"><input type="radio" checked={colour === k} onChange={() => setColour(k)} /> {l}</label>))}</div>
         </div>
         <div>
           <h3 className="text-[15px] mb-1" style={{ fontFamily: HEAD }}>3 · Sizes & finishes — set a price for each</h3>

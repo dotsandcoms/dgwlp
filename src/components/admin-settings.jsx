@@ -1,6 +1,6 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { Loader2, Save, Truck, Percent, CreditCard, DollarSign } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Loader2, Save, Truck, Percent, CreditCard, DollarSign, ChevronDown } from "lucide-react";
 import { C, HEAD } from "@/lib/pricing";
 import { DEFAULT_SETTINGS, mergeSettings } from "@/lib/settings";
 import { friendlyError } from "@/lib/errors";
@@ -12,19 +12,36 @@ const inp = {
   style: { border: `1px solid ${C.line}`, borderRadius: 4 },
 };
 
-function Section({ icon: Icon, title, hint, children }) {
+function AccordionSection({ id, icon: Icon, title, hint, open, onToggle, children }) {
   return (
-    <section className="p-5 sm:p-6 mb-5 bg-white" style={{ border: `1px solid ${C.line}`, borderRadius: 8 }}>
-      <div className="flex items-start gap-3 mb-5">
+    <section className="mb-3 bg-white overflow-hidden" style={{ border: `1px solid ${C.line}`, borderRadius: 8 }}>
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-3 p-4 sm:p-5 text-left"
+      >
         <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: C.greenSoft, color: C.green }}>
           <Icon size={16} />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h2 className="text-[16px]" style={{ fontFamily: HEAD }}>{title}</h2>
-          {hint && <p className="text-[13px] text-neutral-500 mt-0.5">{hint}</p>}
+          {hint && !open && (
+            <p className="text-[12px] text-neutral-500 mt-0.5 truncate">{hint}</p>
+          )}
         </div>
-      </div>
-      {children}
+        <ChevronDown
+          size={18}
+          className="shrink-0 text-neutral-400 transition-transform"
+          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+        />
+      </button>
+      {open && (
+        <div className="px-4 sm:px-5 pb-5 pt-0">
+          {hint && <p className="text-[13px] text-neutral-500 mb-5 -mt-1">{hint}</p>}
+          {children}
+        </div>
+      )}
     </section>
   );
 }
@@ -57,7 +74,11 @@ export function LiveSettings({ toast }) {
   });
   const [keyDirty, setKeyDirty] = useState(false);
   const [passDirty, setPassDirty] = useState(false);
+  const [openId, setOpenId] = useState(null);
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
 
+  // Load once — do not re-fetch when toast identity changes or the browser tab regains focus.
   useEffect(() => {
     let cancelled = false;
     db.fetchSettings()
@@ -76,10 +97,12 @@ export function LiveSettings({ toast }) {
         setKeyDirty(false);
         setPassDirty(false);
       })
-      .catch((e) => toast(friendlyError(e, "Could not load settings")))
+      .catch((e) => toastRef.current(friendlyError(e, "Could not load settings")))
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [toast]);
+  }, []);
+
+  const toggle = (id) => setOpenId((prev) => (prev === id ? null : id));
 
   const save = async () => {
     setSaving(true);
@@ -103,8 +126,9 @@ export function LiveSettings({ toast }) {
           label: (tax.label || "VAT").trim() || "VAT",
         },
         currency: {
-          showUsd: Boolean(currency.showUsd),
           zarPerUsd: Math.max(0.01, Number(currency.zarPerUsd) || DEFAULT_SETTINGS.currency.zarPerUsd),
+          zarPerEur: Math.max(0.01, Number(currency.zarPerEur) || DEFAULT_SETTINGS.currency.zarPerEur),
+          zarPerGbp: Math.max(0.01, Number(currency.zarPerGbp) || DEFAULT_SETTINGS.currency.zarPerGbp),
         },
         payfast: {
           merchantId: (payfast.merchantId || "").trim(),
@@ -116,6 +140,7 @@ export function LiveSettings({ toast }) {
       const saved = await db.saveSettings(next, { previous: baseline });
       setBaseline(saved);
       setShipping(saved.shipping);
+      setTax(saved.tax);
       setCurrency(saved.currency);
       setPayfast({
         merchantId: saved.payfast.merchantId || "",
@@ -157,7 +182,14 @@ export function LiveSettings({ toast }) {
         </Pill>
       </div>
 
-      <Section icon={Truck} title="Delivery" hint="South Africa: set standard to free and still charge for express. International orders are always quoted — checkout will not charge shipping overseas.">
+      <AccordionSection
+        id="delivery"
+        icon={Truck}
+        title="Delivery"
+        hint="South Africa: set standard to free and still charge for express. International orders are always quoted."
+        open={openId === "delivery"}
+        onToggle={toggle}
+      >
         <label className="flex items-center gap-2 mb-4 text-[14px] cursor-pointer">
           <input
             type="checkbox"
@@ -236,19 +268,18 @@ export function LiveSettings({ toast }) {
             />
           </Field>
         </div>
-      </Section>
+      </AccordionSection>
 
-      <Section icon={DollarSign} title="Currency display" hint="Checkout and PayFast always charge in South African rand. USD is an approximate display only.">
-        <label className="flex items-center gap-2 mb-4 text-[14px] cursor-pointer">
-          <input
-            type="checkbox"
-            checked={Boolean(currency.showUsd)}
-            onChange={(e) => setCurrency({ ...currency, showUsd: e.target.checked })}
-          />
-          Show approximate USD prices next to ZAR
-        </label>
-        <div style={{ opacity: currency.showUsd ? 1 : 0.45, pointerEvents: currency.showUsd ? "auto" : "none" }}>
-          <Field label="ZAR PER 1 USD" hint="Example: 18.5 means R2 800 ≈ $151. Update manually when the rate moves.">
+      <AccordionSection
+        id="currency"
+        icon={DollarSign}
+        title="Currency"
+        hint="Shoppers can switch ZAR, USD, EUR and GBP in the header. Checkout still charges in rand."
+        open={openId === "currency"}
+        onToggle={toggle}
+      >
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Field label="ZAR PER 1 USD" hint="e.g. 18.5 → R1 850 ≈ $100">
             <input
               type="number"
               min="0.01"
@@ -258,10 +289,37 @@ export function LiveSettings({ toast }) {
               {...inp}
             />
           </Field>
+          <Field label="ZAR PER 1 EUR" hint="e.g. 20 → R2 000 ≈ €100">
+            <input
+              type="number"
+              min="0.01"
+              step="0.1"
+              value={currency.zarPerEur ?? DEFAULT_SETTINGS.currency.zarPerEur}
+              onChange={(e) => setCurrency({ ...currency, zarPerEur: e.target.value })}
+              {...inp}
+            />
+          </Field>
+          <Field label="ZAR PER 1 GBP" hint="e.g. 23.5 → R2 350 ≈ £100">
+            <input
+              type="number"
+              min="0.01"
+              step="0.1"
+              value={currency.zarPerGbp ?? DEFAULT_SETTINGS.currency.zarPerGbp}
+              onChange={(e) => setCurrency({ ...currency, zarPerGbp: e.target.value })}
+              {...inp}
+            />
+          </Field>
         </div>
-      </Section>
+      </AccordionSection>
 
-      <Section icon={Percent} title="VAT / tax" hint="When enabled, VAT is calculated on subtotal + shipping and added at checkout (prices are treated as exclusive).">
+      <AccordionSection
+        id="vat"
+        icon={Percent}
+        title="VAT / tax"
+        hint="When enabled, VAT is calculated on subtotal + shipping at checkout."
+        open={openId === "vat"}
+        onToggle={toggle}
+      >
         <label className="flex items-center gap-2 mb-4 text-[14px] cursor-pointer">
           <input
             type="checkbox"
@@ -278,12 +336,15 @@ export function LiveSettings({ toast }) {
             <input value={tax.label} onChange={(e) => setTax({ ...tax, label: e.target.value })} placeholder="VAT" {...inp} />
           </Field>
         </div>
-      </Section>
+      </AccordionSection>
 
-      <Section
+      <AccordionSection
+        id="payfast"
         icon={CreditCard}
-        title="PayFast"
+        title="Payment (PayFast)"
         hint="Credentials are only visible to admins. Leave secret fields blank to keep the saved value."
+        open={openId === "payfast"}
+        onToggle={toggle}
       >
         <label className="flex items-center gap-2 mb-4 text-[14px] cursor-pointer">
           <input
@@ -325,9 +386,9 @@ export function LiveSettings({ toast }) {
         <p className="text-[12px] text-neutral-500 mt-2">
           Env vars <code className="text-[11px]">PAYFAST_*</code> are used as a fallback if these fields are empty.
         </p>
-      </Section>
+      </AccordionSection>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end mt-4">
         <Pill onClick={save} disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
           {saving ? "Saving…" : "Save changes"}

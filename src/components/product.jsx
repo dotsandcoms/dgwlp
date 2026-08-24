@@ -4,22 +4,41 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, Minus, Plus, Truck, ShieldCheck, Heart, ArrowLeft } from "lucide-react";
 import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, minPriceForSize, availableSizesOf, availableMaterialsFor } from "@/lib/pricing";
-import { freeShippingLabel, DEFAULT_SETTINGS, formatMoney, internationalShippingNote } from "@/lib/settings";
+import { freeShippingLabel, DEFAULT_SETTINGS, internationalShippingNote } from "@/lib/settings";
+import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { Plate, Scene, RoomPreview, Dropdown, Pill } from "./primitives";
 import { useCart, useToast } from "@/context/providers";
 
 const COLOUR_LABEL = { bw: "Black & White", colour: "Colour" };
 
+const PRINT_TYPES = [
+  { id: "paper", label: "Paper" },
+  { id: "canvas", label: "Canvas" },
+];
+
+/** @returns {"paper"|"canvas"} */
+function printTypeOf(matId) {
+  return String(matId || "").startsWith("canvas") ? "canvas" : "paper";
+}
+
+/** Finish label without the Paper/Canvas prefix. */
+function finishLabel(mat) {
+  return mat.label.replace(/^(Paper|Canvas)\s*[—–-]\s*/, "");
+}
+
 export function ProductDetail({ product }) {
   const router = useRouter();
   const cart = useCart();
   const { toast } = useToast();
+  const { money } = useDisplayCurrency();
   const sizes = availableSizesOf(product);
-  const offersBoth = product.colour === "both";
-  const [printColour, setPrintColour] = useState(offersBoth ? "colour" : (product.colour || "bw"));
+  const printColour = product.colour === "colour" ? "colour" : "bw";
   const [size, setSize] = useState(sizes[0] || "");
   const matsForSize = availableMaterialsFor(product, size);
-  const [material, setMaterial] = useState(matsForSize[0]?.id || "paper");
+  const availableTypes = PRINT_TYPES.filter((t) => matsForSize.some((m) => printTypeOf(m.id) === t.id));
+  const [printType, setPrintType] = useState(() => printTypeOf(matsForSize[0]?.id || "paper"));
+  const finishesForType = matsForSize.filter((m) => printTypeOf(m.id) === printType);
+  const [material, setMaterial] = useState(finishesForType[0]?.id || matsForSize[0]?.id || "paper");
   const [frameCol, setFrameCol] = useState("black");
   const [room, setRoom] = useState("lounge");
   const [qty, setQty] = useState(1);
@@ -27,13 +46,15 @@ export function ProductDetail({ product }) {
   const [zoom, setZoom] = useState(false);
   const [shipNote, setShipNote] = useState("Free shipping on orders over R2 500");
   const [intlNote, setIntlNote] = useState("");
-  const [currency, setCurrency] = useState(DEFAULT_SETTINGS.currency);
 
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem("dg_wish") || "[]"); setWish(s.includes(product.id)); } catch {} }, [product.id]);
-  useEffect(() => { if (!matsForSize.some((m) => m.id === material)) setMaterial(matsForSize[0]?.id || "paper"); }, [size]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!offersBoth) setPrintColour(product.colour === "colour" ? "colour" : "bw");
-  }, [product.colour, offersBoth]);
+    const types = PRINT_TYPES.filter((t) => matsForSize.some((m) => printTypeOf(m.id) === t.id));
+    const nextType = types.some((t) => t.id === printType) ? printType : (types[0]?.id || "paper");
+    if (nextType !== printType) setPrintType(nextType);
+    const finishes = matsForSize.filter((m) => printTypeOf(m.id) === nextType);
+    if (!finishes.some((m) => m.id === material)) setMaterial(finishes[0]?.id || matsForSize[0]?.id || "paper");
+  }, [size]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let cancelled = false;
     fetch("/api/settings")
@@ -43,7 +64,6 @@ export function ProductDetail({ product }) {
         const shipping = { ...DEFAULT_SETTINGS.shipping, ...(data?.shipping || {}) };
         const label = freeShippingLabel(shipping);
         setShipNote(label || "Nationwide courier delivery");
-        setCurrency({ ...DEFAULT_SETTINGS.currency, ...(data?.currency || {}) });
         if (shipping.internationalUnframedOnly) {
           setIntlNote(`${internationalShippingNote(shipping)} Unframed prints only for overseas orders.`);
         } else {
@@ -57,7 +77,6 @@ export function ProductDetail({ product }) {
   const mat = MATERIALS.find((m) => m.id === material) || MATERIALS[0];
   const unit = priceOfVariant(product, size, material);
   const colourLabel = COLOUR_LABEL[printColour] || COLOUR_LABEL.bw;
-  const money = (n) => formatMoney(n, currency);
   const summary = [
     colourLabel,
     sizeLabel(size),
@@ -150,28 +169,42 @@ export function ProductDetail({ product }) {
             <button onClick={toggleWish} className="mt-2 shrink-0" title="Wishlist"><Heart size={22} color={wish ? "#c0392b" : C.gray} fill={wish ? "#c0392b" : "none"} /></button>
           </div>
           <div className="text-[22px] mb-1" style={{ fontFamily: HEAD }}>{money(unit)}</div>
+          <div className="text-[12px] text-neutral-500 mb-1">All prices include VAT</div>
           <div className="text-[12px] text-neutral-500 mb-5">{RATIOS[product.ratio].label} · limited edition</div>
           <p className="text-[15px] leading-relaxed text-neutral-700 mb-8">{product.desc}</p>
 
-          {offersBoth ? (
-            <Dropdown
-              label="Print colour"
-              value={printColour}
-              onChange={setPrintColour}
-              options={[
-                { value: "colour", label: "Colour" },
-                { value: "bw", label: "Black & White" },
-              ]}
-            />
-          ) : (
-            <div className="mb-5">
-              <div style={{ fontFamily: HEAD, letterSpacing: ".05em" }} className="text-[15px] mb-2 text-neutral-700">Print colour</div>
-              <div className="text-[15px] py-2" style={{ borderBottom: `1px solid ${C.ink}` }}>{COLOUR_LABEL[product.colour] || COLOUR_LABEL.bw}</div>
-            </div>
-          )}
+          <div className="mb-5">
+            <div style={{ fontFamily: HEAD, letterSpacing: ".05em" }} className="text-[15px] mb-2 text-neutral-700">Print colour</div>
+            <div className="text-[15px] py-2" style={{ borderBottom: `1px solid ${C.ink}` }}>{COLOUR_LABEL[printColour]}</div>
+          </div>
 
           <Dropdown label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: `${sizeLabel(s)} — from ${money(minPriceForSize(product, s))}` }))} />
-          <Dropdown label="Print & finish" value={material} onChange={setMaterial} options={matsForSize.map((m) => ({ value: m.id, label: `${m.label} — ${money(priceOfVariant(product, size, m.id))}` }))} />
+          {availableTypes.length > 1 ? (
+            <Dropdown
+              label="Print"
+              value={printType}
+              onChange={(v) => {
+                setPrintType(v);
+                const finishes = matsForSize.filter((m) => printTypeOf(m.id) === v);
+                if (!finishes.some((m) => m.id === material)) setMaterial(finishes[0]?.id || "paper");
+              }}
+              options={availableTypes.map((t) => ({ value: t.id, label: t.label }))}
+            />
+          ) : availableTypes.length === 1 ? (
+            <div className="mb-5">
+              <div style={{ fontFamily: HEAD, letterSpacing: ".05em" }} className="text-[15px] mb-2 text-neutral-700">Print</div>
+              <div className="text-[15px] py-2" style={{ borderBottom: `1px solid ${C.ink}` }}>{availableTypes[0].label}</div>
+            </div>
+          ) : null}
+          <Dropdown
+            label="Finish"
+            value={material}
+            onChange={setMaterial}
+            options={finishesForType.map((m) => ({
+              value: m.id,
+              label: `${finishLabel(m)} — ${money(priceOfVariant(product, size, m.id))}`,
+            }))}
+          />
           {mat.framed && <Dropdown label="Frame colour" value={frameCol} onChange={setFrameCol} options={FRAME_COLOURS.map((f) => ({ value: f.id, label: f.label }))} />}
 
           <div className="flex items-center gap-4 mt-2">
@@ -188,7 +221,6 @@ export function ProductDetail({ product }) {
             <div>Category: {product.category}</div>
             <div className="flex items-center gap-2 pt-2 text-neutral-600"><Truck size={15} /> {shipNote}</div>
             {intlNote && <div className="text-[12px] text-neutral-500 pl-6">{intlNote}</div>}
-            <div className="flex items-center gap-2 text-neutral-600"><ShieldCheck size={15} /> Signed, limited-edition archival print</div>
           </div>
         </div>
       </div>

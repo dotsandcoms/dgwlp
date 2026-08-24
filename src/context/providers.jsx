@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { browserClient, hasSupabase, authCallbackUrl } from "@/lib/supabase";
 import { checkIsAdmin } from "@/lib/admin-data";
 import { stashPendingProfile, flushPendingProfile, signupMeta, saveDeliveryProfile, fetchMyProfile } from "@/lib/auth-profile";
+import { StoreSettingsProvider } from "@/lib/use-public-settings";
 
 /* ------------------------------- Toast ----------------------------- */
 const ToastCtx = createContext(null);
@@ -84,7 +85,12 @@ function AuthProvider({ children }) {
     const sb = browserClient();
     let cancelled = false;
 
-    const syncAdmin = async (authUser) => {
+    const syncAdmin = async (authUser, event) => {
+      // Tab focus refreshes the JWT — don't flash loading or remount admin (wipes forms).
+      if (event === "TOKEN_REFRESHED") {
+        setSessionUser(authUser || null);
+        return;
+      }
       setSessionUser(authUser || null);
       setAdminReady(false);
       try {
@@ -132,7 +138,7 @@ function AuthProvider({ children }) {
     const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
       // Skip the initial event — boot() already handled it (avoids double fetch races)
       if (event === "INITIAL_SESSION") return;
-      syncAdmin(session?.user || null);
+      syncAdmin(session?.user || null, event);
     });
     return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -278,7 +284,9 @@ export function Providers({ children }) {
     <ToastProvider>
       <AuthProvider>
         <AuthModalProvider>
-          <CartProvider>{children}</CartProvider>
+          <StoreSettingsProvider>
+            <CartProvider>{children}</CartProvider>
+          </StoreSettingsProvider>
         </AuthModalProvider>
       </AuthProvider>
     </ToastProvider>

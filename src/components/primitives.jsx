@@ -11,9 +11,8 @@ const ROOM_PHOTOS = {
   gallery: "room-gallery.jpg",
 };
 
-export function Plate({ product, className, style, showSig = true, printColour }) {
-  // printColour ('bw' | 'colour') overrides product.colour — used when product offers both.
-  const mode = printColour || (product.colour === "both" ? "colour" : product.colour);
+export function Plate({ product, className, style, showSig = false, printColour }) {
+  const mode = printColour || (product.colour === "colour" ? "colour" : "bw");
   const bw = mode === "bw";
   if (product.image) {
     return (

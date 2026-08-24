@@ -18,7 +18,7 @@ function mapRow(row, { priceRange, variants } = {}) {
     name: row.name,
     category: row.categories?.name || row.category || "Uncategorised",
     ratio: row.ratio_id || "landscape",
-    colour: row.colour || "bw",
+    colour: row.colour === "bw" || !row.colour ? "bw" : "colour",
     sku: row.sku,
     desc: row.description || "",
     image: imageUrl(row.hero_image),

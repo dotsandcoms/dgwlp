@@ -4,14 +4,33 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, ShoppingBag, User, Minus, Plus, Trash2, Check, ShieldCheck, Search } from "lucide-react";
 import { C, HEAD } from "@/lib/pricing";
-import { formatMoney } from "@/lib/settings";
-import { usePublicSettings } from "@/lib/use-public-settings";
+import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { Plate, Pill, Row } from "./primitives";
 import { useCart, useAuth, useToast, useAuthModal } from "@/context/providers";
 import { browserClient, hasSupabase, imageUrl } from "@/lib/supabase";
 import { MOCK_PRODUCTS } from "@/lib/mock";
 import { adminPath } from "@/lib/admin-path";
 import { LegalModal } from "./legal";
+
+function CurrencySelect({ compact = false }) {
+  const { code, setCode, options } = useDisplayCurrency();
+  return (
+    <label className="relative inline-flex items-center" title="Display currency">
+      <select
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        aria-label="Display currency"
+        className="appearance-none bg-transparent outline-none cursor-pointer text-[12px] sm:text-[13px] pr-5"
+        style={{ fontFamily: HEAD, letterSpacing: ".06em", color: C.ink }}
+      >
+        {options.map((o) => (
+          <option key={o.code} value={o.code}>{compact ? o.code : `${o.symbol} ${o.code}`}</option>
+        ))}
+      </select>
+      <span className="pointer-events-none absolute right-0 text-[10px] text-neutral-400" aria-hidden>▾</span>
+    </label>
+  );
+}
 
 const LINKS = [["HOME", "/"], ["ABOUT", "/about"], ["SHOP", "/shop"], ["CONTACT", "/contact"]];
 
@@ -267,6 +286,7 @@ export function Header() {
           </Link>
           <nav className="hidden md:flex items-center gap-8" style={{ fontFamily: HEAD, letterSpacing: ".08em" }}>
             {LINKS.map(([l, href]) => <Link key={href} href={href} className="text-[14px] hover:opacity-60" style={{ color: active(href) ? C.green : C.ink }}>{l}</Link>)}
+            <CurrencySelect />
             <button onClick={() => setSearchOpen(true)} className="hover:opacity-60" aria-label="Search" title="Search"><Search size={18} /></button>
             <AccountMenu />
             <button onClick={() => cart.setOpen(true)} className="relative hover:opacity-60">
@@ -275,6 +295,7 @@ export function Header() {
             </button>
           </nav>
           <div className="flex items-center gap-3 sm:gap-4 md:hidden shrink-0">
+            <CurrencySelect compact />
             <AccountMenu />
             <button onClick={() => setSearchOpen(true)} aria-label="Search"><Search size={20} /></button>
             <button onClick={() => cart.setOpen(true)} className="relative"><ShoppingBag size={20} />
@@ -293,6 +314,9 @@ export function Header() {
           </div>
           <div className="flex-1 flex flex-col gap-2 p-6" style={{ fontFamily: HEAD, letterSpacing: ".08em" }}>
             {LINKS.map(([l, href]) => <Link key={href} href={href} onClick={() => setOpen(false)} className="text-left text-[20px] py-3" style={{ borderBottom: `1px solid ${C.line}` }}>{l}</Link>)}
+            <div className="py-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+              <CurrencySelect />
+            </div>
             <button onClick={() => { setOpen(false); setSearchOpen(true); }} className="text-left text-[20px] py-3 flex items-center gap-2" style={{ borderBottom: `1px solid ${C.line}` }}><Search size={20} /> SEARCH</button>
             {liveUser ? (
               <>
@@ -321,8 +345,7 @@ export function CartDrawer() {
   const cart = useCart();
   const { toast } = useToast();
   const router = useRouter();
-  const { currency } = usePublicSettings();
-  const money = (n) => formatMoney(n, currency);
+  const { money, isForeign } = useDisplayCurrency();
   const go = () => { cart.setOpen(false); router.push("/checkout"); };
   return (
     <div className="fixed inset-0 z-[55]" style={{ pointerEvents: cart.open ? "auto" : "none" }}>
@@ -361,7 +384,10 @@ export function CartDrawer() {
           </div>
           <div className="p-5 shrink-0" style={{ borderTop: `1px solid ${C.line}` }}>
             <Row l="Subtotal" v={money(cart.subtotal)} bold />
-            <p className="text-[11px] text-neutral-500 mb-3">Shipping calculated at checkout · free over R2 500</p>
+            <p className="text-[11px] text-neutral-500 mb-3">
+              Shipping calculated at checkout
+              {isForeign ? " · charged in ZAR" : ""}
+            </p>
             <Pill onClick={go} style={{ width: "100%" }}>Secure checkout →</Pill>
           </div>
         </>)}

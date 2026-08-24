@@ -10,6 +10,12 @@ export const BODY = '"Poppins","Nunito Sans",system-ui,sans-serif';
 export const zar = (n) => "R" + Number(n || 0).toLocaleString("en-ZA");
 
 export const CATEGORY_NAMES = ["Big Cats", "Elephants", "Rhino", "Plains Game", "Birds", "Landscapes", "Black & White"];
+
+/** Print colour follows category: only “Black & White” is mono; everything else is colour. */
+export function colourFromCategory(categoryName) {
+  const name = String(categoryName || "").trim().toLowerCase();
+  return name === "black & white" || name === "black and white" ? "bw" : "colour";
+}
 export const PROVINCES = ["Gauteng", "Western Cape", "KwaZulu-Natal", "Eastern Cape", "Free State", "Limpopo", "Mpumalanga", "North West", "Northern Cape"];
 
 export const RATIOS = {

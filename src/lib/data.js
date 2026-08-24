@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { serverClient, hasSupabase, imageUrl } from "./supabase";
+import { colourFromCategory } from "./pricing";
 import { MOCK_PRODUCTS, MOCK_CATEGORIES } from "./mock";
 
 // Deterministic gradient so real products (before images load) still render
@@ -12,13 +13,14 @@ function gradFor(name = "") {
 
 function mapRow(row, { priceRange, variants } = {}) {
   const g = gradFor(row.name);
+  const category = row.categories?.name || row.category || "Uncategorised";
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
-    category: row.categories?.name || row.category || "Uncategorised",
+    category,
     ratio: row.ratio_id || "landscape",
-    colour: row.colour === "bw" || !row.colour ? "bw" : "colour",
+    colour: colourFromCategory(category),
     sku: row.sku,
     desc: row.description || "",
     image: imageUrl(row.hero_image),

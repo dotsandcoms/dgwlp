@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, Minus, Plus, Truck, ShieldCheck, Heart, ArrowLeft } from "lucide-react";
-import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, minPriceForSize, availableSizesOf, availableMaterialsFor } from "@/lib/pricing";
+import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, minPriceForSize, availableSizesOf, availableMaterialsFor, colourFromCategory } from "@/lib/pricing";
 import { freeShippingLabel, DEFAULT_SETTINGS, internationalShippingNote } from "@/lib/settings";
 import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { Plate, Scene, RoomPreview, Dropdown, Pill } from "./primitives";
@@ -32,7 +32,7 @@ export function ProductDetail({ product }) {
   const { toast } = useToast();
   const { money } = useDisplayCurrency();
   const sizes = availableSizesOf(product);
-  const printColour = product.colour === "colour" ? "colour" : "bw";
+  const printColour = colourFromCategory(product.category);
   const [size, setSize] = useState(sizes[0] || "");
   const matsForSize = availableMaterialsFor(product, size);
   const availableTypes = PRINT_TYPES.filter((t) => matsForSize.some((m) => printTypeOf(m.id) === t.id));

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation";
 import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings, Star, X } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, ROOMS, CATEGORY_NAMES, rangeOf, artPlacement } from "@/lib/pricing";
+import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, ROOMS, CATEGORY_NAMES, rangeOf, artPlacement, colourFromCategory } from "@/lib/pricing";
 import { MOCK_PRODUCTS, MOCK_ORDERS, SALES } from "@/lib/mock";
 import { hasSupabase, imageUrl } from "@/lib/supabase";
 import { friendlyError } from "@/lib/errors";
@@ -189,6 +189,25 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
       return next.size === prev.size ? prev : next;
     });
   }, [products]);
+
+  // One-time per browser session: align DB colour with category
+  useEffect(() => {
+    let cancelled = false;
+    try {
+      if (sessionStorage.getItem("dg_colour_synced_v1")) return undefined;
+    } catch {}
+    db.bulkSyncPrintColours()
+      .then(({ colour, bw }) => {
+        if (cancelled) return;
+        try { sessionStorage.setItem("dg_colour_synced_v1", "1"); } catch {}
+        toast(`Print colours synced · ${colour} colour · ${bw} black & white`);
+        onDeleted();
+      })
+      .catch((e) => {
+        if (!cancelled) toast(friendlyError(e, "Could not sync print colours"));
+      });
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleOne = (id) => {
     setSelected((prev) => {
@@ -525,7 +544,7 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [ratio, setRatio] = useState("landscape");
-  const [colour, setColour] = useState("bw");
+  const [colour, setColour] = useState("colour");
   const [desc, setDesc] = useState("");
   const [file, setFile] = useState(null);
   const [existingImage, setExistingImage] = useState(null); // hero_image path already on the product
@@ -537,6 +556,12 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
   useEffect(() => {
     if (!categoryId && categories.length) setCategoryId(categories[0].id);
   }, [categories, categoryId]);
+
+  // Print colour follows category — only Black & White is mono
+  useEffect(() => {
+    const cat = categories.find((c) => c.id === categoryId);
+    if (cat) setColour(colourFromCategory(cat.name));
+  }, [categoryId, categories]);
 
   // Default price grid for the chosen ratio (only when not editing an existing product)
   useEffect(() => {
@@ -553,7 +578,6 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
       setName(product.name);
       setCategoryId(product.category_id || "");
       setRatio(product.ratio_id);
-      setColour(product.colour === "bw" ? "bw" : "colour");
       setDesc(product.description || "");
       setExistingImage(product.hero_image || null);
       const es = {}; const pr = {};
@@ -633,7 +657,10 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
             <div className="relative"><select value={ratio} onChange={(e) => setRatio(e.target.value)} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{Object.entries(RATIOS).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}</select><ChevronDown size={16} className="absolute right-3 top-3.5 pointer-events-none" /></div>
           </div>
           <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" rows={3} className="w-full py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
-          <div className="flex flex-wrap gap-4 mt-3">{[["bw", "Black & White"], ["colour", "Colour"]].map(([k, l]) => (<label key={k} className="flex items-center gap-2 text-[14px]"><input type="radio" checked={colour === k} onChange={() => setColour(k)} /> {l}</label>))}</div>
+          <div className="mt-3 text-[14px] text-neutral-600">
+            Print colour: <span style={{ fontFamily: HEAD, color: C.ink }}>{colour === "bw" ? "Black & White" : "Colour"}</span>
+            <span className="block text-[12px] text-neutral-500 mt-1">Set by category — only “Black & White” prints are mono.</span>
+          </div>
         </div>
         <div>
           <h3 className="text-[15px] mb-1" style={{ fontFamily: HEAD }}>3 · Sizes &amp; finishes — set a price for each</h3>
@@ -955,13 +982,17 @@ function DemoEditor({ toast }) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState(CATEGORY_NAMES[0]);
   const [ratio, setRatio] = useState("landscape");
-  const [colour, setColour] = useState("bw");
+  const [colour, setColour] = useState(() => colourFromCategory(CATEGORY_NAMES[0]));
   const [desc, setDesc] = useState("");
   const [uploaded, setUploaded] = useState(false);
   const [enabledSizes, setEnabledSizes] = useState({});
   const [enabledMats, setEnabledMats] = useState({ paper: true, paper_framed: true, canvas_rolled: true, canvas_framed: true, canvas_mounted: true });
   const [prices, setPrices] = useState({});
   const [rooms, setRooms] = useState({ lounge: true, bedroom: true, study: false, gallery: true });
+
+  useEffect(() => {
+    setColour(colourFromCategory(category));
+  }, [category]);
 
   useEffect(() => {
     const es = {}; const pr = {};
@@ -998,7 +1029,10 @@ function DemoEditor({ toast }) {
             <div className="relative"><select value={ratio} onChange={(e) => setRatio(e.target.value)} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{Object.entries(RATIOS).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}</select><ChevronDown size={16} className="absolute right-3 top-3.5 pointer-events-none" /></div>
           </div>
           <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" rows={3} className="w-full py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
-          <div className="flex flex-wrap gap-4 mt-3">{[["bw", "Black & White"], ["colour", "Colour"]].map(([k, l]) => (<label key={k} className="flex items-center gap-2 text-[14px]"><input type="radio" checked={colour === k} onChange={() => setColour(k)} /> {l}</label>))}</div>
+          <div className="mt-3 text-[14px] text-neutral-600">
+            Print colour: <span style={{ fontFamily: HEAD, color: C.ink }}>{colour === "bw" ? "Black & White" : "Colour"}</span>
+            <span className="block text-[12px] text-neutral-500 mt-1">Set by category — only “Black & White” prints are mono.</span>
+          </div>
         </div>
         <div>
           <h3 className="text-[15px] mb-1" style={{ fontFamily: HEAD }}>3 · Sizes & finishes — set a price for each</h3>

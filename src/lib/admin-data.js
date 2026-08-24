@@ -4,6 +4,7 @@
 "use client";
 import { browserClient } from "./supabase";
 import { DEFAULT_SETTINGS, mergeSettings } from "./settings";
+import { colourFromCategory } from "./pricing";
 import { enrichOrdersWithImages } from "./orders";
 
 export const slugify = (s) =>
@@ -148,9 +149,39 @@ export async function bulkUpdateProductCategory(ids, categoryId) {
   const list = Array.isArray(ids) ? ids.filter(Boolean) : [];
   if (!list.length) throw new Error("Select at least one print");
   if (!categoryId) throw new Error("Choose a category");
-  const { error } = await sb.from("products").update({ category_id: categoryId }).in("id", list);
+  const cats = await fetchCategories();
+  const dest = cats.find((c) => c.id === categoryId);
+  const colour = colourFromCategory(dest?.name);
+  const { error } = await sb.from("products").update({ category_id: categoryId, colour }).in("id", list);
   if (error) throw error;
   return list.length;
+}
+
+/**
+ * Set products.colour from category: Black & White → bw, everything else → colour.
+ * @returns {{ colour: number, bw: number }}
+ */
+export async function bulkSyncPrintColours() {
+  const sb = browserClient();
+  const cats = await fetchCategories();
+  let colour = 0;
+  let bw = 0;
+  for (const c of cats) {
+    const next = colourFromCategory(c.name);
+    const { data, error } = await sb.from("products").update({ colour: next }).eq("category_id", c.id).select("id");
+    if (error) throw error;
+    const n = (data || []).length;
+    if (next === "bw") bw += n;
+    else colour += n;
+  }
+  const { data: orphaned, error: oErr } = await sb
+    .from("products")
+    .update({ colour: "colour" })
+    .is("category_id", null)
+    .select("id");
+  if (oErr) throw oErr;
+  colour += (orphaned || []).length;
+  return { colour, bw };
 }
 
 /* --------------------------------- orders ------------------------------ */

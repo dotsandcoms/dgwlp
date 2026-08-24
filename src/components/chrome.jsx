@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, ShoppingBag, User, Minus, Plus, Trash2, Check, ShieldCheck, Search } from "lucide-react";
-import { C, HEAD } from "@/lib/pricing";
+import { C, HEAD, colourFromCategory } from "@/lib/pricing";
 import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { Plate, Pill, Row } from "./primitives";
 import { useCart, useAuth, useToast, useAuthModal } from "@/context/providers";
@@ -181,7 +181,7 @@ function SiteSearch({ open, onClose }) {
             slug: row.slug,
             name: row.name,
             sku: row.sku,
-            colour: row.colour,
+            colour: colourFromCategory(row.categories?.name),
             desc: row.description || "",
             category: row.categories?.name || "",
             image: imageUrl(row.hero_image),

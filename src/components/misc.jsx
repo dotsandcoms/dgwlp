@@ -282,8 +282,8 @@ export function Contact() {
             <Reveal delay={200}>
               <div className="space-y-6">
                 {[
-                  { label: "Studio", value: "Johannesburg, South Africa" },
-                  { label: "Orders", value: "Archival paper & canvas · SA courier · international quoted" },
+                  { label: "Studio", value: "Pretoria, South Africa" },
+                  { label: "Orders", value: "SA courier · international quoted" },
                 ].map((item) => (
                   <div key={item.label} style={{ borderBottom: `1px solid ${C.line}` }} className="pb-5">
                     <div className="text-[11px] tracking-[.18em] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>{item.label.toUpperCase()}</div>
@@ -302,8 +302,7 @@ export function Contact() {
                 <p className="text-[13px] leading-relaxed text-neutral-700">
                   Looking for something specific? Browse the{" "}
                   <Link href="/shop" style={{ color: C.green, fontFamily: HEAD }}>collection</Link>
-                  {" "}or read more{" "}
-                  <Link href="/about" style={{ color: C.green, fontFamily: HEAD }}>about Doron</Link>.
+                  {" "}or contact us so we can find the perfect print for you.
                 </p>
               </div>
             </Reveal>

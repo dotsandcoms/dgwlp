@@ -416,7 +416,7 @@ export function Footer() {
       <div className="max-w-[1240px] mx-auto px-5 py-14 grid gap-10 md:grid-cols-4">
         <div className="md:col-span-2">
           <div style={{ fontFamily: HEAD }} className="tracking-[.12em] text-white text-[16px] mb-3">DORON GOLDSTEIN <span style={{ color: C.green }}>PHOTOGRAPHY</span></div>
-          <p className="text-[13px] leading-relaxed opacity-80 max-w-sm">For the love of wildlife. Signed, limited-edition fine-art photographs — printed on archival paper and canvas. Shipped across South Africa; international delivery quoted on request.</p>
+          <p className="text-[13px] leading-relaxed opacity-80 max-w-sm">For the love of wildlife. Shipped across South Africa; international delivery quoted on request.</p>
         </div>
         <div className="text-[13px]">
           <div style={{ fontFamily: HEAD }} className="tracking-[.14em] text-white mb-3 text-[12px]">EXPLORE</div>

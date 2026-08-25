@@ -217,7 +217,7 @@ export function Home({ products, featured = [] }) {
         <div className="max-w-[1240px] mx-auto px-5 pt-10 sm:pt-12 pb-12 sm:pb-16">
           <Reveal>
             <p className="text-center text-[15px] sm:text-[18px] leading-relaxed text-neutral-700 max-w-[640px] mx-auto mb-8 sm:mb-10" style={{ fontFamily: HEAD, fontWeight: 300 }}>
-              Over visiting the Kruger, Kgalagadi and Timbivati — every frame a window into the animal world, printed to last a lifetime.
+            Having spent the past sixty years visiting the Kruger, Kgalagadi and Timbavati, Doron has developed a deep connection with the wild. Every frame is a window into the animal world — a moment captured in time and printed to last a lifetime.
             </p>
           </Reveal>
 

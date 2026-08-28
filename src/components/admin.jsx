@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings, Star, X } from "lucide-react";
+import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings, Star, X, Users, FileText } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, ROOMS, CATEGORY_NAMES, rangeOf, artPlacement, colourFromCategory } from "@/lib/pricing";
 import { MOCK_PRODUCTS, MOCK_ORDERS, SALES } from "@/lib/mock";
@@ -12,6 +12,8 @@ import { Plate, Scene, artworkStyle, Pill, StatusBadge } from "./primitives";
 import { LiveSettings, DemoSettings } from "./admin-settings";
 import { LiveFeatured, DemoFeatured } from "./admin-featured";
 import { LiveOrders } from "./admin-orders";
+import { LiveContent } from "./admin-content";
+import { LiveCustomers } from "./admin-customers";
 import { NotFoundView } from "./not-found";
 import { useToast, useAuth, useAuthModal } from "@/context/providers";
 import { adminPath } from "@/lib/admin-path";
@@ -99,7 +101,7 @@ function LiveAdminApp() {
       .finally(() => setLoading(false));
   }, [toast]);
 
-  const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["featured", "Featured", Star], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["categories", "Categories", Tag], ["settings", "Settings", Settings]];
+  const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["featured", "Featured", Star], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["customers", "Customers", Users], ["categories", "Categories", Tag], ["content", "Content", FileText], ["settings", "Settings", Settings]];
   const openEditor = (id = null) => { setEditingId(id); setView("editor"); };
 
   return (
@@ -122,7 +124,9 @@ function LiveAdminApp() {
         {view === "featured" && <LiveFeatured products={products} toast={toast} />}
         {view === "editor" && <LiveEditor editingId={editingId} categories={categories} toast={toast} onSaved={() => { reloadProducts(); setView("products"); }} />}
         {view === "orders" && <LiveOrders orders={orders} onChanged={reloadOrders} toast={toast} />}
+        {view === "customers" && <LiveCustomers toast={toast} />}
         {view === "categories" && <LiveCategories categories={categories} onChanged={reloadCategories} toast={toast} />}
+        {view === "content" && <LiveContent toast={toast} />}
         {view === "settings" && <LiveSettings toast={toast} />}
       </>)}
     </div>

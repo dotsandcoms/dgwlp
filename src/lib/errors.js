@@ -12,6 +12,8 @@ const KNOWN = [
   [/categories_slug_key/i, "A category with that name already exists."],
   [/duplicate key value violates unique constraint/i, "That already exists — try a different name."],
   [/violates row-level security policy/i, "You don't have permission to do that."],
+  [/cannot delete a customer with orders/i, "This customer has orders and can't be deleted."],
+  [/customer not found/i, "Customer not found."],
   [/violates foreign key constraint/i, "That's still linked to other data and can't be changed right now."],
   [/jwt expired/i, "Your session expired — please sign in again."],
   [/failed to fetch|networkerror/i, "Couldn't reach the server — check your connection and try again."],

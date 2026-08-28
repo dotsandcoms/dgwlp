@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { C, HEAD, RATIOS, rangeOf } from "@/lib/pricing";
 import { siteImage } from "@/lib/supabase";
+import { mergeSiteContent, getHowSteps } from "@/lib/site-content";
 import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { Plate, Parallax, Reveal, Pill } from "./primitives";
 
@@ -160,13 +161,9 @@ const TRUST_LINES = [
   "Shipped locally across South Africa and internationally",
 ];
 
-const HOW_STEPS = [
-  { n: "01", title: "Choose your print", body: "Browse the collection and find the frame that belongs on your wall." },
-  { n: "02", title: "Size & finish", body: "Select paper or canvas, framing, and the size that suits your space." },
-  { n: "03", title: "Delivered to you", body: "Archival production and careful packing — couriered across South Africa." },
-];
-
-export function Home({ products, featured = [] }) {
+export function Home({ products, featured = [], content: contentProp }) {
+  const content = contentProp || mergeSiteContent();
+  const howSteps = getHowSteps(content.home);
   const heroP = { image: siteImage("hero.jpg"), colour: "bw", name: "Wildebeest at Dawn" };
   const aboutP = { image: siteImage("about.jpg"), colour: "colour", name: "Doron Goldstein", grad: ["#2f2f2d", "#a9a49b"], angle: 120 };
   const categories = onePerCategory(products);
@@ -217,7 +214,7 @@ export function Home({ products, featured = [] }) {
         <div className="max-w-[1240px] mx-auto px-5 pt-10 sm:pt-12 pb-12 sm:pb-16">
           <Reveal>
             <p className="text-center text-[15px] sm:text-[18px] leading-relaxed text-neutral-700 max-w-[640px] mx-auto mb-8 sm:mb-10" style={{ fontFamily: HEAD, fontWeight: 300 }}>
-            Having spent the past sixty years visiting the Kruger, Kgalagadi and Timbavati, Doron has developed a deep connection with the wild. Every frame is a window into the animal world — a moment captured in time and printed to last a lifetime.
+            {content.home.intro}
             </p>
           </Reveal>
 
@@ -299,7 +296,7 @@ export function Home({ products, featured = [] }) {
             </h2>
           </Reveal>
           <div className="grid md:grid-cols-3 gap-10 md:gap-8">
-            {HOW_STEPS.map((step, i) => (
+            {howSteps.map((step, i) => (
               <Reveal key={step.n} delay={80 + i * 80}>
                 <div className="text-center md:text-left">
                   <div className="text-[12px] tracking-[.2em] mb-3" style={{ fontFamily: HEAD, color: C.green }}>{step.n}</div>
@@ -332,7 +329,7 @@ export function Home({ products, featured = [] }) {
             </Reveal>
             <Reveal delay={140}>
               <p className="text-[15px] sm:text-[16px] leading-relaxed text-white/75 mb-8 max-w-md">
-                After decades as a dentist, Doron turned a lifelong love of the African bush into signed, limited-edition wildlife photographs — patience and precision, reframed.
+                {content.home.aboutTeaser}
               </p>
             </Reveal>
             <Reveal delay={200}>

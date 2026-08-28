@@ -46,7 +46,7 @@ function WildMoments() {
     >
       <div className="relative max-w-[1240px] mx-auto px-5 pt-12 sm:pt-14 pb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[11px] tracking-[.28em] mb-2" style={{ fontFamily: HEAD, color: C.green }}>FROM THE BUSH</p>
+          <p className="text-[11px] tracking-[.28em] mb-2 text-white/90" style={{ fontFamily: HEAD }}>FROM THE BUSH</p>
           <h2 className="text-white text-[28px] sm:text-[40px] leading-none font-light" style={{ fontFamily: HEAD }}>
             Moments that hold still.
           </h2>
@@ -294,7 +294,7 @@ export function ShopClient({ products, categories }) {
           style={{ background: "linear-gradient(180deg,rgba(20,20,18,.45) 0%,rgba(20,20,18,.72) 100%)" }}
         />
         <div className="relative max-w-[1240px] mx-auto px-5 py-12 sm:py-16">
-          <p className="text-[11px] tracking-[.28em] mb-3" style={{ fontFamily: HEAD, color: C.green }}>
+          <p className="text-[11px] tracking-[.28em] mb-3 text-white/90" style={{ fontFamily: HEAD }}>
             DORON GOLDSTEIN · WILDLIFE PHOTOGRAPHY
           </p>
           <h1

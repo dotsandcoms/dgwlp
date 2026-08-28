@@ -442,6 +442,234 @@ export async function saveFeaturedIds(productIds = []) {
 
 export { FEATURED_MAX };
 
+/** Registered customers (profiles). Uses admin_list_customers RPC when available. */
+export async function fetchCustomers() {
+  const sb = browserClient();
+  if (!sb) return [];
+
+  const { data: rpcData, error: rpcErr } = await sb.rpc("admin_list_customers");
+  if (!rpcErr && Array.isArray(rpcData)) return rpcData;
+
+  const { data, error } = await sb
+    .from("profiles")
+    .select("id,full_name,phone,created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((p) => ({ ...p, email: null }));
+}
+
+function mapCustomerDetail(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const addr = raw.address && typeof raw.address === "object" && raw.address.street
+    ? {
+        street: raw.address.street || "",
+        suburb: raw.address.suburb || "",
+        city: raw.address.city || "",
+        province: raw.address.province || "",
+        postal: raw.address.postal || raw.address.postal_code || "",
+        notes: raw.address.notes || "",
+      }
+    : null;
+  return {
+    id: raw.id,
+    full_name: raw.full_name || "",
+    email: raw.email || "",
+    phone: raw.phone || "",
+    created_at: raw.created_at,
+    address: addr,
+    order_count: raw.order_count ?? (Array.isArray(raw.orders) ? raw.orders.length : 0),
+    orders: Array.isArray(raw.orders) ? raw.orders : [],
+  };
+}
+
+async function fetchCustomerDetailFallback(id) {
+  const sb = browserClient();
+  const { data: profile, error: profErr } = await sb
+    .from("profiles")
+    .select("id,full_name,phone,created_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (profErr) throw profErr;
+  if (!profile) return null;
+
+  const [{ data: addresses }, { data: orders }] = await Promise.all([
+    sb.from("addresses")
+      .select("street,suburb,city,province,postal_code,notes,is_default,created_at")
+      .eq("user_id", id)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1),
+    sb.from("orders")
+      .select("id,order_no,status,total_cents,created_at")
+      .eq("user_id", id)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const addr = Array.isArray(addresses) ? addresses[0] : null;
+  return mapCustomerDetail({
+    ...profile,
+    email: null,
+    address: addr?.street
+      ? {
+          street: addr.street,
+          suburb: addr.suburb,
+          city: addr.city,
+          province: addr.province,
+          postal: addr.postal_code,
+          notes: addr.notes,
+        }
+      : null,
+    orders: orders || [],
+    order_count: (orders || []).length,
+  });
+}
+
+/** Single customer for the admin detail modal. */
+export async function fetchCustomerDetail(id) {
+  const sb = browserClient();
+  if (!sb) return null;
+
+  const { data, error } = await sb.rpc("admin_get_customer", { p_id: id });
+  if (!error && data) return mapCustomerDetail(data);
+  if (error && !/admin_get_customer|42883|does not exist/i.test(error.message || "")) throw error;
+
+  return fetchCustomerDetailFallback(id);
+}
+
+/** Update customer profile, address, and email. */
+export async function updateCustomer(id, payload) {
+  const sb = browserClient();
+  if (!sb) throw new Error("No database connection");
+
+  const a = payload.address || {};
+  const args = {
+    p_id: id,
+    p_full_name: (payload.full_name || "").trim(),
+    p_phone: (payload.phone || "").trim(),
+    p_email: (payload.email || "").trim() || null,
+    p_street: (a.street || "").trim() || null,
+    p_suburb: (a.suburb || "").trim() || null,
+    p_city: (a.city || "").trim() || null,
+    p_province: (a.province || "").trim() || null,
+    p_postal: (a.postal || a.postal_code || "").trim() || null,
+    p_notes: (a.notes || "").trim() || null,
+  };
+
+  const { data, error } = await sb.rpc("admin_update_customer", args);
+  if (!error && data) return mapCustomerDetail(data);
+
+  if (error && !/admin_update_customer|42883|does not exist/i.test(error.message || "")) throw error;
+
+  const { error: profErr } = await sb.from("profiles").upsert(
+    {
+      id,
+      full_name: args.p_full_name,
+      phone: args.p_phone || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+  if (profErr) throw profErr;
+
+  if (args.p_street && args.p_city && args.p_postal) {
+    await sb.from("addresses").delete().eq("user_id", id).eq("is_default", true);
+    const { error: addrErr } = await sb.from("addresses").insert({
+      user_id: id,
+      street: args.p_street,
+      suburb: args.p_suburb,
+      city: args.p_city,
+      province: args.p_province || "Gauteng",
+      postal_code: args.p_postal,
+      notes: args.p_notes,
+      is_default: true,
+    });
+    if (addrErr) throw addrErr;
+  }
+
+  return fetchCustomerDetail(id);
+}
+
+/** Delete customer account (blocked when orders exist). */
+export async function deleteCustomer(id) {
+  const sb = browserClient();
+  if (!sb) throw new Error("No database connection");
+
+  const { error } = await sb.rpc("admin_delete_customer", { p_id: id });
+  if (!error) return true;
+  if (!/admin_delete_customer|42883|does not exist/i.test(error.message || "")) throw error;
+
+  const { count, error: ordErr } = await sb
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", id);
+  if (ordErr) throw ordErr;
+  if (count > 0) throw new Error("Cannot delete a customer with orders on file");
+
+  await sb.from("addresses").delete().eq("user_id", id);
+  const { error: profErr } = await sb.from("profiles").delete().eq("id", id);
+  if (profErr) throw profErr;
+  return true;
+}
+
+async function adminAccessToken() {
+  const sb = browserClient();
+  if (!sb) return null;
+  const { data } = await sb.auth.getSession();
+  return data?.session?.access_token || null;
+}
+
+/** Create a collector account (requires service role on the server). */
+export async function createCustomer(payload) {
+  const token = await adminAccessToken();
+  if (!token) throw new Error("Please sign in again.");
+
+  const res = await fetch("/api/admin/customers", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not create customer");
+  return mapCustomerDetail(body.customer);
+}
+
+const CONTENT_KEY = "content";
+
+export async function fetchSiteContent() {
+  const sb = browserClient();
+  const { mergeSiteContent } = await import("./site-content");
+  if (!sb) {
+    try {
+      const raw = localStorage.getItem("dg_site_content");
+      if (raw) return mergeSiteContent(JSON.parse(raw));
+    } catch {}
+    return mergeSiteContent();
+  }
+  const { data, error } = await sb.from("site_settings").select("value").eq("key", CONTENT_KEY).maybeSingle();
+  if (error) throw error;
+  return mergeSiteContent(data?.value);
+}
+
+export async function saveSiteContent(content) {
+  const { mergeSiteContent } = await import("./site-content");
+  const merged = mergeSiteContent(content);
+  const sb = browserClient();
+  if (!sb) {
+    try { localStorage.setItem("dg_site_content", JSON.stringify(merged)); } catch {}
+    return merged;
+  }
+  const { error } = await sb.from("site_settings").upsert(
+    { key: CONTENT_KEY, value: merged, updated_at: new Date().toISOString() },
+    { onConflict: "key" },
+  );
+  if (error) throw error;
+  return merged;
+}
+
 /** Public shipping + tax + currency (uses anon RLS where allowed; prefer /api/settings). */
 export async function fetchPublicSettings() {
   const sb = browserClient();

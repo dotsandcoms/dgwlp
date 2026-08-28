@@ -11,6 +11,7 @@ import { Pill, StatusBadge, Plate, Reveal } from "./primitives";
 import { AddressFields } from "./address-fields";
 import { emptyAddress } from "@/lib/address";
 import { useAuth, useToast, useAuthModal } from "@/context/providers";
+import { useSiteContent } from "@/lib/use-site-content";
 import { friendlyError } from "@/lib/errors";
 import { fetchMyOrders } from "@/lib/orders";
 
@@ -270,6 +271,7 @@ export function AccountView() {
   const { user, logout, updateProfile, ready: authReady } = useAuth();
   const { toast } = useToast();
   const { openAuth } = useAuthModal();
+  const content = useSiteContent();
   const router = useRouter();
   const [orders, setOrders] = useState([]);
   const [wishCount, setWishCount] = useState(0);
@@ -472,7 +474,7 @@ export function AccountView() {
             <Reveal delay={140}>
               <div className="p-6" style={{ background: C.greenSoft, borderRadius: 8 }}>
                 <h3 className="text-[14px] mb-2" style={{ fontFamily: HEAD }}>Continue collecting</h3>
-                <p className="text-[13px] text-neutral-600 mb-4">Browse the latest wildlife prints from the Kruger, Kgalagadi and beyond.</p>
+                <p className="text-[13px] text-neutral-600 mb-4">{content.account.browseBlurb}</p>
                 <Link href="/shop"><Pill size="sm">View the shop</Pill></Link>
               </div>
             </Reveal>

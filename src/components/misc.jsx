@@ -5,8 +5,11 @@ import { C, HEAD } from "@/lib/pricing";
 import { siteImage } from "@/lib/supabase";
 import { Plate, Reveal, Pill, Parallax } from "./primitives";
 import { useToast } from "@/context/providers";
+import { useSiteContent } from "@/lib/use-site-content";
 
 export function About() {
+  const content = useSiteContent();
+  const about = content.about;
   const portrait = {
     image: siteImage("about.jpg"),
     colour: "colour",
@@ -39,7 +42,7 @@ export function About() {
             </Reveal>
             <Reveal delay={200}>
               <p className="mt-6 text-[16px] sm:text-[18px] leading-relaxed text-white/80 max-w-md" style={{ fontFamily: HEAD, fontWeight: 300 }}>
-                From the dental chair to the African bush — a life of precision, patience, and a deep love of wildlife.
+                {about.heroSubtitle}
               </p>
             </Reveal>
           </div>
@@ -50,12 +53,12 @@ export function About() {
       <section className="max-w-[820px] mx-auto px-5 py-20 sm:py-24">
         <Reveal>
           <p className="text-[18px] sm:text-[22px] leading-relaxed text-neutral-700" style={{ fontFamily: HEAD, fontWeight: 300 }}>
-            Doron Goldstein spent 33 years as a dentist, building a career founded on dedication, precision, patience, and an unwavering commitment to his patients. Following neck surgery, he was left with a partially paralysed arm, forcing him into an unexpected and premature retirement.
+            {about.openingP1}
           </p>
         </Reveal>
         <Reveal delay={100}>
           <p className="text-[16px] sm:text-[18px] leading-relaxed text-neutral-600 mt-8">
-            What initially felt like a devastating setback became an opportunity to pursue a lifelong passion that had always been waiting in the wings… The African bush and its wildlife.
+            {about.openingP2}
           </p>
         </Reveal>
       </section>
@@ -81,12 +84,8 @@ export function About() {
             </Reveal>
             <Reveal delay={140}>
               <div className="space-y-5 text-[15px] leading-relaxed text-neutral-700">
-                <p>
-                  In many ways, wildlife photography demands many of the same qualities as dentistry. It requires patience, technical skill, careful observation, attention to detail, and knowing that the smallest movement can make all the difference. Those qualities naturally found a new home behind the lens of a camera.
-                </p>
-                <p>
-                  Having visited the Kruger National Park well over 100 times and the Kgalagadi Transfrontier Park on 15 occasions, his transition into wildlife photography felt less like discovering a new passion and more like deepening one that had existed for a lifetime.
-                </p>
+                <p>{about.changeFocusP1}</p>
+                <p>{about.changeFocusP2}</p>
               </div>
             </Reveal>
           </div>
@@ -105,15 +104,9 @@ export function About() {
         </Reveal>
         <Reveal delay={140}>
           <div className="space-y-6 text-[15px] sm:text-[16px] leading-relaxed text-neutral-700">
-            <p>
-              For Doron, wildlife photography is about far more than taking beautiful photographs. It is about immersing himself in nature, waiting patiently for hours, and capturing authentic moments that reveal not only an animal’s beauty, but also its personality, behaviour and place within the wild.
-            </p>
-            <p>
-              Through his photographs, he invites others to experience the wonder of the natural world as he sees it. His images preserve moments that exist for only a fraction of a second, yet tell stories that endure long afterwards. Each photograph reflects his deep respect for wildlife and his belief that nature is something to be admired, protected and celebrated.
-            </p>
-            <p>
-              His work demonstrates that retirement does not have to mark the closing of one chapter — it can be the beginning of another. What started as an unexpected consequence of adversity has become a creative pursuit filled with purpose, discovery and fulfilment.
-            </p>
+            <p>{about.workP1}</p>
+            <p>{about.workP2}</p>
+            <p>{about.workP3}</p>
           </div>
         </Reveal>
       </section>
@@ -126,7 +119,7 @@ export function About() {
           </Reveal>
           <Reveal delay={100}>
             <blockquote className="text-white text-[24px] sm:text-[34px] leading-snug font-light" style={{ fontFamily: HEAD }}>
-              “Wildlife photography has reminded me that every ending can become the beginning of something new and special.”
+              “{about.quote}”
             </blockquote>
           </Reveal>
           <Reveal delay={200}>
@@ -154,7 +147,7 @@ export function About() {
           </Reveal>
           <Reveal delay={80}>
             <p className="text-[15px] text-white/80 mb-8 max-w-md mx-auto">
-              Signed, limited-edition archival prints from the Kruger, Kgalagadi and beyond.
+              {about.ctaBlurb}
             </p>
           </Reveal>
           <Reveal delay={140}>
@@ -168,6 +161,7 @@ export function About() {
 
 export function Contact() {
   const { toast } = useToast();
+  const content = useSiteContent();
   const [f, setF] = useState({ name: "", email: "", subject: "", msg: "", company: "" });
   const [sending, setSending] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -283,7 +277,7 @@ export function Contact() {
               <div className="space-y-6">
                 {[
                   { label: "Studio", value: "Pretoria, South Africa" },
-                  { label: "Orders", value: "SA courier · international quoted" },
+                  { label: "Orders", value: content.contact.ordersNote },
                 ].map((item) => (
                   <div key={item.label} style={{ borderBottom: `1px solid ${C.line}` }} className="pb-5">
                     <div className="text-[11px] tracking-[.18em] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>{item.label.toUpperCase()}</div>
@@ -299,11 +293,7 @@ export function Contact() {
 
             <Reveal delay={280}>
               <div className="mt-10 p-5" style={{ background: C.greenSoft, borderRadius: 6 }}>
-                <p className="text-[13px] leading-relaxed text-neutral-700">
-                  Looking for something specific? Browse the{" "}
-                  <Link href="/shop" style={{ color: C.green, fontFamily: HEAD }}>collection</Link>
-                  {" "}or contact us so we can find the perfect print for you.
-                </p>
+                <p className="text-[13px] leading-relaxed text-neutral-700">{content.contact.sidebarCta}</p>
               </div>
             </Reveal>
           </div>
@@ -356,7 +346,7 @@ export function Contact() {
           </Reveal>
           <Reveal delay={140}>
             <p className="text-[15px] text-white/75 mb-8 max-w-md mx-auto">
-              Explore signed, limited-edition prints from the Kruger, Kgalagadi and beyond.
+              {content.contact.closingBlurb}
             </p>
           </Reveal>
           <Reveal delay={200}>

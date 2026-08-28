@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, Minus, Plus, Truck, ShieldCheck, Heart, ArrowLeft } from "lucide-react";
-import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, minPriceForSize, availableSizesOf, availableMaterialsFor, colourFromCategory } from "@/lib/pricing";
+import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, availableSizesOf, availableMaterialsFor, colourFromCategory } from "@/lib/pricing";
 import { freeShippingLabel, DEFAULT_SETTINGS, internationalShippingNote } from "@/lib/settings";
 import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { Plate, Scene, RoomPreview, Dropdown, Pill } from "./primitives";
@@ -78,7 +78,6 @@ export function ProductDetail({ product }) {
   const unit = priceOfVariant(product, size, material);
   const colourLabel = COLOUR_LABEL[printColour] || COLOUR_LABEL.bw;
   const summary = [
-    colourLabel,
     sizeLabel(size),
     mat.label,
     mat.framed ? FRAME_COLOURS.find((f) => f.id === frameCol)?.label + " frame" : null,
@@ -170,15 +169,10 @@ export function ProductDetail({ product }) {
           </div>
           <div className="text-[22px] mb-1" style={{ fontFamily: HEAD }}>{money(unit)}</div>
           <div className="text-[12px] text-neutral-500 mb-1">All prices include VAT</div>
-          <div className="text-[12px] text-neutral-500 mb-5">{RATIOS[product.ratio].label} · limited edition</div>
+          <div className="text-[12px] text-neutral-500 mb-5">{RATIOS[product.ratio].label}</div>
           <p className="text-[15px] leading-relaxed text-neutral-700 mb-8">{product.desc}</p>
 
-          <div className="mb-5">
-            <div style={{ fontFamily: HEAD, letterSpacing: ".05em" }} className="text-[15px] mb-2 text-neutral-700">Print colour</div>
-            <div className="text-[15px] py-2" style={{ borderBottom: `1px solid ${C.ink}` }}>{COLOUR_LABEL[printColour]}</div>
-          </div>
-
-          <Dropdown label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: `${sizeLabel(s)} — from ${money(minPriceForSize(product, s))}` }))} />
+          <Dropdown label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: sizeLabel(s) }))} />
           {availableTypes.length > 1 ? (
             <Dropdown
               label="Print"
@@ -202,7 +196,7 @@ export function ProductDetail({ product }) {
             onChange={setMaterial}
             options={finishesForType.map((m) => ({
               value: m.id,
-              label: `${finishLabel(m)} — ${money(priceOfVariant(product, size, m.id))}`,
+              label: finishLabel(m),
             }))}
           />
           {mat.framed && <Dropdown label="Frame colour" value={frameCol} onChange={setFrameCol} options={FRAME_COLOURS.map((f) => ({ value: f.id, label: f.label }))} />}

@@ -4,6 +4,7 @@ import { C, HEAD } from "@/lib/pricing";
 import { Pill } from "./primitives";
 import { AddressFields } from "./address-fields";
 import { emptyAddress } from "@/lib/address";
+import { PasswordInput } from "./password-input";
 
 const inp = {
   className: "w-full py-3.5 px-4 text-[14px] outline-none bg-white",
@@ -42,7 +43,7 @@ export function RegisterForm({ onDone, compact }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 min-w-0">
         <input placeholder="Full name" value={f.name} onChange={set("name")} autoComplete="name" {...inp} />
         <input placeholder="Email address" type="email" value={f.email} onChange={set("email")} autoComplete="email" {...inp} />
-        <input placeholder="Password" type="password" value={f.pass} onChange={set("pass")} autoComplete="new-password" {...inp} />
+        <PasswordInput value={f.pass} onChange={set("pass")} placeholder="Password" autoComplete="new-password" {...inp} />
         <input placeholder="Mobile number" value={f.phone} onChange={set("phone")} autoComplete="tel" {...inp} />
       </div>
 
@@ -73,7 +74,14 @@ export function LoginForm({ onDone }) {
       <p className="text-[13px] text-neutral-500 mb-5">Enter the email and password for your collector account.</p>
       <input placeholder="Email address" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} autoComplete="email" className={`${inp.className} max-w-full`} style={inp.style} />
       <div className="h-3" />
-      <input placeholder="Password" type="password" value={f.pass} onChange={(e) => setF({ ...f, pass: e.target.value })} autoComplete="current-password" className={`${inp.className} max-w-full`} style={inp.style} />
+      <PasswordInput
+        value={f.pass}
+        onChange={(e) => setF({ ...f, pass: e.target.value })}
+        placeholder="Password"
+        autoComplete="current-password"
+        className={`${inp.className} max-w-full`}
+        style={inp.style}
+      />
       <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", top: "auto", width: 1, height: 1, overflow: "hidden" }}>
         <label>Company<input tabIndex={-1} autoComplete="off" value={hp} onChange={(e) => setHp(e.target.value)} /></label>
       </div>

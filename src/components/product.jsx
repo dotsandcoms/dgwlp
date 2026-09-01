@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { X, Minus, Plus, Truck, ShieldCheck, Heart, ArrowLeft } from "lucide-react";
-import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, ROOMS, sizeLabel, priceOfVariant, availableSizesOf, availableMaterialsFor, colourFromCategory } from "@/lib/pricing";
+import { X, Minus, Plus, Truck, Heart, ArrowLeft } from "lucide-react";
+import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, sizeLabel, priceOfVariant, availableSizesOf, availableMaterialsFor, colourFromCategory } from "@/lib/pricing";
 import { freeShippingLabel, DEFAULT_SETTINGS, internationalShippingNote } from "@/lib/settings";
 import { useDisplayCurrency } from "@/lib/use-public-settings";
-import { Plate, Scene, RoomPreview, Dropdown, Pill } from "./primitives";
+import { Plate, Dropdown, Pill } from "./primitives";
 import { useCart, useToast } from "@/context/providers";
 
 const COLOUR_LABEL = { bw: "Black & White", colour: "Colour" };
@@ -40,7 +40,6 @@ export function ProductDetail({ product }) {
   const finishesForType = matsForSize.filter((m) => printTypeOf(m.id) === printType);
   const [material, setMaterial] = useState(finishesForType[0]?.id || matsForSize[0]?.id || "paper");
   const [frameCol, setFrameCol] = useState("black");
-  const [room, setRoom] = useState("lounge");
   const [qty, setQty] = useState(1);
   const [wish, setWish] = useState(false);
   const [zoom, setZoom] = useState(false);
@@ -106,7 +105,6 @@ export function ProductDetail({ product }) {
       size,
       material,
       frameCol,
-      room,
       printColour,
       price: unit,
       qty,
@@ -151,15 +149,19 @@ export function ProductDetail({ product }) {
       </div>
       <div className="grid md:grid-cols-2 gap-10">
         <div>
-          <RoomPreview product={product} printColour={printColour} size={size} material={material} frameCol={frameCol} room={room} onZoom={() => setZoom(true)} />
-          <div className="flex gap-3 mt-4 overflow-x-auto pb-1 no-scrollbar">
-            {ROOMS.map((r) => (
-              <button key={r.id} onClick={() => setRoom(r.id)} className="shrink-0 rounded overflow-hidden" style={{ width: 88, height: 66, position: "relative", border: `2px solid ${room === r.id ? C.green : C.line}` }}>
-                <Scene room={r.id} />
-                <span className="absolute bottom-0 left-0 right-0 text-[9px] text-center py-0.5" style={{ background: "rgba(255,255,255,.85)", fontFamily: HEAD, letterSpacing: ".05em" }}>{r.label}</span>
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={() => setZoom(true)}
+            title="View full size"
+            className="block w-full overflow-hidden text-left"
+            style={{ borderRadius: 4, border: `1px solid ${C.line}`, cursor: "zoom-in" }}
+          >
+            <Plate
+              product={product}
+              printColour={printColour}
+              style={{ width: "100%", aspectRatio: RATIOS[product.ratio].ar }}
+            />
+          </button>
         </div>
 
         <div>

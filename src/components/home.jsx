@@ -2,27 +2,24 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
-import { C, HEAD, RATIOS, rangeOf } from "@/lib/pricing";
+import { C, HEAD, RATIOS } from "@/lib/pricing";
 import { siteImage } from "@/lib/supabase";
 import { mergeSiteContent, getHowSteps } from "@/lib/site-content";
-import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { Plate, Parallax, Reveal, Pill } from "./primitives";
 
-export function Card({ p }) {
-  const { moneyRange } = useDisplayCurrency();
-  const [min, max] = rangeOf(p);
-  const isPano = p.ratio === "pano" || p.ratio === "pan2";
-  const cardAr = isPano ? (RATIOS[p.ratio]?.ar || "3 / 1") : "1 / 1";
+export function Card({ p, tileAspect }) {
+  const cardAr = tileAspect || RATIOS[p.ratio]?.ar || "3 / 2";
   return (
     <div className="group text-center">
-      <Link href={`/product/${p.slug}`} className="block w-full overflow-hidden">
-        <Plate product={p} style={{ width: "100%", aspectRatio: cardAr, transition: "transform .6s" }} className="group-hover:scale-[1.05]" />
+      <Link href={`/product/${p.slug}`} className="block w-full overflow-hidden" style={{ borderRadius: 4 }}>
+        <Plate
+          product={p}
+          fit="contain"
+          style={{ width: "100%", aspectRatio: cardAr, transition: "transform .6s" }}
+          className="group-hover:scale-[1.05]"
+        />
       </Link>
-      <div className="mt-4 text-[16px]" style={{ fontFamily: HEAD }}>{p.name}</div>
-      <div className="text-[14px] text-neutral-600 mt-1">
-        {moneyRange(min, max)}
-      </div>
-      <div className="mt-3"><Link href={`/product/${p.slug}`}><Pill variant="outline" size="sm">Select options</Pill></Link></div>
+      <Link href={`/product/${p.slug}`} className="block mt-4 text-[16px] hover:opacity-70" style={{ fontFamily: HEAD }}>{p.name}</Link>
     </div>
   );
 }
@@ -271,10 +268,10 @@ export function Home({ products, featured = [], content: contentProp }) {
                 <Link href="/shop"><Pill variant="outline" size="sm">SHOP ALL</Pill></Link>
               </Reveal>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-10 sm:gap-x-8 sm:gap-y-12">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-5 sm:gap-x-7 gap-y-10 sm:gap-y-14">
               {featuredPrints.map((p, i) => (
                 <Reveal key={p.id} delay={i * 50}>
-                  <Card p={p} />
+                  <Card p={p} tileAspect="4 / 5" />
                 </Reveal>
               ))}
             </div>

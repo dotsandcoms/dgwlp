@@ -43,6 +43,7 @@ export function ProductDetail({ product }) {
   const [qty, setQty] = useState(1);
   const [wish, setWish] = useState(false);
   const [zoom, setZoom] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const [shipNote, setShipNote] = useState("Free shipping on orders over R2 500");
   const [intlNote, setIntlNote] = useState("");
 
@@ -93,6 +94,31 @@ export function ProductDetail({ product }) {
     }
     router.push(shopHref);
   };
+
+  const openZoom = () => {
+    setZoomLevel(1);
+    setZoom(true);
+    document.body.style.overflow = "hidden";
+  };
+
+  const closeZoom = () => {
+    setZoom(false);
+    setZoomLevel(1);
+    document.body.style.overflow = "";
+  };
+
+  const toggleZoom = () => {
+    setZoomLevel((z) => (z >= 2 ? 1 : 2.5));
+  };
+
+  useEffect(() => {
+    if (!zoom) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") closeZoom();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [zoom]);
 
   const toggleWish = () => { try { const s = JSON.parse(localStorage.getItem("dg_wish") || "[]"); const n = s.includes(product.id) ? s.filter((x) => x !== product.id) : [...s, product.id]; localStorage.setItem("dg_wish", JSON.stringify(n)); setWish(n.includes(product.id)); toast(n.includes(product.id) ? "Saved to wishlist" : "Removed from wishlist"); } catch {} };
 
@@ -151,7 +177,7 @@ export function ProductDetail({ product }) {
         <div>
           <button
             type="button"
-            onClick={() => setZoom(true)}
+            onClick={openZoom}
             title="View full size"
             className="block w-full overflow-hidden text-left"
             style={{ borderRadius: 4, border: `1px solid ${C.line}`, cursor: "zoom-in" }}
@@ -171,7 +197,7 @@ export function ProductDetail({ product }) {
           </div>
           <div className="text-[22px] mb-1" style={{ fontFamily: HEAD }}>{money(unit)}</div>
           <div className="text-[12px] text-neutral-500 mb-1">All prices include VAT</div>
-          <div className="text-[12px] text-neutral-500 mb-5">{RATIOS[product.ratio].label}</div>
+          <div className="text-[12px] text-neutral-500 mb-5">Ratio · {RATIOS[product.ratio].label}</div>
           <p className="text-[15px] leading-relaxed text-neutral-700 mb-8">{product.desc}</p>
 
           <Dropdown label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: sizeLabel(s) }))} />
@@ -222,11 +248,53 @@ export function ProductDetail({ product }) {
       </div>
 
       {zoom && (
-        <div onClick={() => setZoom(false)} className="fixed inset-0 z-[60] flex items-center justify-center p-6" style={{ background: "rgba(15,15,13,.94)" }}>
-          <button className="absolute top-5 right-5 text-white" onClick={() => setZoom(false)}><X size={30} /></button>
-          <div style={{ maxWidth: 760, width: "100%" }}>
-            <Plate product={product} printColour={printColour} style={{ width: "100%", aspectRatio: RATIOS[product.ratio].ar, borderRadius: 4 }} />
-            <p className="text-center text-white/70 text-[13px] mt-4" style={{ fontFamily: HEAD, letterSpacing: ".1em" }}>{product.name.toUpperCase()} · {colourLabel.toUpperCase()}</p>
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6"
+          style={{ background: "rgba(15,15,13,.94)" }}
+          role="dialog"
+          aria-modal="true"
+          onClick={closeZoom}
+        >
+          <button type="button" className="absolute top-5 right-5 text-white z-10" onClick={closeZoom} aria-label="Close">
+            <X size={30} />
+          </button>
+          <div
+            className="w-full max-w-[min(96vw,960px)] overflow-auto"
+            style={{ maxHeight: "90vh" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={toggleZoom}
+              className="block w-full"
+              style={{ cursor: zoomLevel >= 2 ? "zoom-out" : "zoom-in" }}
+              title={zoomLevel >= 2 ? "Zoom out" : "Zoom in"}
+              aria-label={zoomLevel >= 2 ? "Zoom out" : "Zoom in"}
+            >
+              <div
+                style={{
+                  width: zoomLevel >= 2 ? "250%" : "100%",
+                  margin: "0 auto",
+                  transition: "width .3s ease",
+                }}
+              >
+                <Plate
+                  product={product}
+                  printColour={printColour}
+                  fit="contain"
+                  style={{
+                    width: "100%",
+                    aspectRatio: RATIOS[product.ratio].ar,
+                    borderRadius: 4,
+                    backgroundColor: "#1a1a18",
+                  }}
+                />
+              </div>
+            </button>
+            <p className="text-center text-white/70 text-[13px] mt-4 px-2" style={{ fontFamily: HEAD, letterSpacing: ".1em" }}>
+              {product.name.toUpperCase()} · {colourLabel.toUpperCase()}
+              {zoomLevel < 2 ? " · Click image to zoom in" : " · Click image to zoom out"}
+            </p>
           </div>
         </div>
       )}

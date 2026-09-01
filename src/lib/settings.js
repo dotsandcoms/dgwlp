@@ -18,10 +18,13 @@ export const DEFAULT_SETTINGS = {
     label: "VAT",
   },
   currency: {
-    // ZAR per 1 unit of foreign currency (manual rates for approximate display)
+    // ZAR per 1 unit of foreign currency (for approximate display)
     zarPerUsd: 18.5,
     zarPerEur: 20,
     zarPerGbp: 23.5,
+    ratesUpdatedAt: null,
+    rateDate: null,
+    source: "manual",
   },
   payfast: {
     merchantId: "",

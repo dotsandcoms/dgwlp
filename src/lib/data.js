@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { serverClient, hasSupabase, imageUrl } from "./supabase";
 import { colourFromCategory } from "./pricing";
+import { parseAnimalTags, inferAnimalTags } from "./product-tags";
 import { MOCK_PRODUCTS, MOCK_CATEGORIES } from "./mock";
 
 // Deterministic gradient so real products (before images load) still render
@@ -14,6 +15,7 @@ function gradFor(name = "") {
 function mapRow(row, { priceRange, variants } = {}) {
   const g = gradFor(row.name);
   const category = row.categories?.name || row.category || "Uncategorised";
+  const animalTags = inferAnimalTags({ ...row, animalTags: parseAnimalTags(row.animal_tags) });
   return {
     id: row.id,
     slug: row.slug,
@@ -23,6 +25,7 @@ function mapRow(row, { priceRange, variants } = {}) {
     colour: colourFromCategory(category),
     sku: row.sku,
     desc: row.description || "",
+    animalTags,
     image: imageUrl(row.hero_image),
     grad: g.grad,
     angle: g.angle,
@@ -31,15 +34,31 @@ function mapRow(row, { priceRange, variants } = {}) {
   };
 }
 
+const PRODUCT_FIELDS = "id,slug,name,sku,ratio_id,colour,description,hero_image,categories(name)";
+const PRODUCT_FIELDS_TAGS = `${PRODUCT_FIELDS},animal_tags`;
+
+async function fetchPublishedProducts(sb) {
+  let res = await sb
+    .from("products")
+    .select(PRODUCT_FIELDS_TAGS)
+    .eq("is_published", true)
+    .order("created_at", { ascending: false });
+  if (res.error && /animal_tags/i.test(res.error.message || "")) {
+    res = await sb
+      .from("products")
+      .select(PRODUCT_FIELDS)
+      .eq("is_published", true)
+      .order("created_at", { ascending: false });
+  }
+  return res;
+}
+
 export async function getProducts() {
   if (!hasSupabase) return MOCK_PRODUCTS;
   try {
     const sb = serverClient();
     const [{ data, error }, { data: ranges }] = await Promise.all([
-      sb.from("products")
-        .select("id,slug,name,sku,ratio_id,colour,description,hero_image,categories(name)")
-        .eq("is_published", true)
-        .order("created_at", { ascending: false }),
+      fetchPublishedProducts(sb),
       sb.from("product_price_range").select("product_id,min_cents,max_cents"),
     ]);
     if (error || !data) return MOCK_PRODUCTS; // fall back to demo only on a real query failure
@@ -57,11 +76,15 @@ export async function getProduct(slug) {
   if (!hasSupabase) return MOCK_PRODUCTS.find((p) => p.slug === slug) || null;
   try {
     const sb = serverClient();
-    const { data, error } = await sb
+    let res = await sb
       .from("products")
-      .select("id,slug,name,sku,ratio_id,colour,description,hero_image,categories(name)")
+      .select(PRODUCT_FIELDS_TAGS)
       .eq("slug", slug)
       .maybeSingle();
+    if (res.error && /animal_tags/i.test(res.error.message || "")) {
+      res = await sb.from("products").select(PRODUCT_FIELDS).eq("slug", slug).maybeSingle();
+    }
+    const { data, error } = res;
     if (error || !data) return MOCK_PRODUCTS.find((p) => p.slug === slug) || null;
     const { data: variantRows } = await sb
       .from("product_variants")

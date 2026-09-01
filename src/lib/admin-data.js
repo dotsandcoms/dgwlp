@@ -637,6 +637,21 @@ export async function createCustomer(payload) {
   return mapCustomerDetail(body.customer);
 }
 
+/** Fetch live ECB rates (Frankfurter) and save to site_settings.currency. */
+export async function refreshCurrencyRates() {
+  const token = await adminAccessToken();
+  if (!token) throw new Error("Please sign in again.");
+
+  const res = await fetch("/api/admin/currency-rates", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Could not refresh rates");
+  return body.currency;
+}
+
 const CONTENT_KEY = "content";
 
 export async function fetchSiteContent() {

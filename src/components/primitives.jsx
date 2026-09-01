@@ -11,12 +11,27 @@ const ROOM_PHOTOS = {
   gallery: "room-gallery.jpg",
 };
 
-export function Plate({ product, className, style, showSig = false, printColour }) {
+export function Plate({ product, className, style, showSig = false, printColour, fit = "cover" }) {
   const mode = printColour || (product.colour === "colour" ? "colour" : "bw");
   const bw = mode === "bw";
+  const contain = fit === "contain";
   if (product.image) {
     return (
-      <div className={className} style={{ position: "relative", overflow: "hidden", backgroundImage: `url(${product.image})`, backgroundSize: "cover", backgroundPosition: "center", filter: bw ? "grayscale(1) contrast(1.03)" : "none", transition: "filter .35s ease", ...style }}>
+      <div
+        className={className}
+        style={{
+          position: "relative",
+          overflow: "hidden",
+          backgroundImage: `url(${product.image})`,
+          backgroundSize: contain ? "contain" : "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: contain ? "no-repeat" : undefined,
+          backgroundColor: contain ? "#fff" : undefined,
+          filter: bw ? "grayscale(1) contrast(1.03)" : "none",
+          transition: "filter .35s ease",
+          ...style,
+        }}
+      >
         {showSig && <span style={sigStyle}>Doron Goldstein ©</span>}
       </div>
     );

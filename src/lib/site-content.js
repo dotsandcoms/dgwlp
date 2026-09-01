@@ -48,7 +48,7 @@ export const DEFAULT_SITE_CONTENT = {
     ordersNote: "SA Shipping Free · International Shipped to be quoted on request",
     sidebarCta:
       "Looking for something specific? Browse the collection or contact us so we can fulfill your specific requirements.",
-    closingBlurb: "Explore high quality wildlife prints from the Kruger, Kgalagadi and beyond.",
+    closingBlurb: "Explore high quality wildlife prints from the Kruger National Park, Greater Kruger and Kgalagadi Transfrontier Park.",
   },
   account: {
     browseBlurb: "High Quality wildlife prints from the Kruger, Kgalagadi and beyond.",

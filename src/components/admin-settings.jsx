@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import { Loader2, Save, Truck, Percent, CreditCard, DollarSign, ChevronDown } from "lucide-react";
+import { Loader2, Save, Truck, Percent, CreditCard, DollarSign, ChevronDown, RefreshCw } from "lucide-react";
 import { C, HEAD } from "@/lib/pricing";
 import { DEFAULT_SETTINGS, mergeSettings } from "@/lib/settings";
 import { friendlyError } from "@/lib/errors";
@@ -75,6 +75,7 @@ export function LiveSettings({ toast }) {
   const [keyDirty, setKeyDirty] = useState(false);
   const [passDirty, setPassDirty] = useState(false);
   const [openId, setOpenId] = useState(null);
+  const [refreshingRates, setRefreshingRates] = useState(false);
   const toastRef = useRef(toast);
   toastRef.current = toast;
 
@@ -104,6 +105,20 @@ export function LiveSettings({ toast }) {
 
   const toggle = (id) => setOpenId((prev) => (prev === id ? null : id));
 
+  const refreshLiveRates = async () => {
+    setRefreshingRates(true);
+    try {
+      const next = await db.refreshCurrencyRates();
+      setCurrency(next);
+      setBaseline((b) => ({ ...b, currency: next }));
+      toast("Exchange rates updated from Frankfurter");
+    } catch (e) {
+      toast(friendlyError(e, "Could not fetch live rates"));
+    } finally {
+      setRefreshingRates(false);
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -129,6 +144,9 @@ export function LiveSettings({ toast }) {
           zarPerUsd: Math.max(0.01, Number(currency.zarPerUsd) || DEFAULT_SETTINGS.currency.zarPerUsd),
           zarPerEur: Math.max(0.01, Number(currency.zarPerEur) || DEFAULT_SETTINGS.currency.zarPerEur),
           zarPerGbp: Math.max(0.01, Number(currency.zarPerGbp) || DEFAULT_SETTINGS.currency.zarPerGbp),
+          ratesUpdatedAt: currency.ratesUpdatedAt || null,
+          rateDate: currency.rateDate || null,
+          source: currency.source || "manual",
         },
         payfast: {
           merchantId: (payfast.merchantId || "").trim(),
@@ -274,10 +292,24 @@ export function LiveSettings({ toast }) {
         id="currency"
         icon={DollarSign}
         title="Currency"
-        hint="Shoppers can switch ZAR, USD, EUR and GBP in the header. Checkout still charges in rand."
+        hint="Shoppers can switch ZAR, USD, EUR and GBP in the header. Checkout still charges in rand. Rates auto-refresh daily."
         open={openId === "currency"}
         onToggle={toggle}
       >
+        <div className="flex flex-wrap items-center gap-3 mb-5">
+          <Pill size="sm" variant="outline" onClick={refreshLiveRates} disabled={refreshingRates}>
+            {refreshingRates ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Refresh live rates
+          </Pill>
+          {currency.ratesUpdatedAt ? (
+            <span className="text-[12px] text-neutral-500">
+              Updated {new Date(currency.ratesUpdatedAt).toLocaleString("en-ZA")}
+              {currency.rateDate ? ` · ECB ${currency.rateDate}` : ""}
+            </span>
+          ) : (
+            <span className="text-[12px] text-neutral-500">Rates not refreshed yet — click to fetch live ECB rates.</span>
+          )}
+        </div>
         <div className="grid sm:grid-cols-3 gap-4">
           <Field label="ZAR PER 1 USD" hint="e.g. 18.5 → R1 850 ≈ $100">
             <input

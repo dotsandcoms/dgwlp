@@ -239,9 +239,6 @@ export function Contact() {
         </div>
 
         <div className="relative max-w-[1240px] mx-auto px-5 py-24 sm:py-32 flex flex-col justify-end min-h-[62vh]">
-          <Reveal>
-            <p className="tracking-[.28em] text-[12px] sm:text-[13px] mb-4" style={{ fontFamily: HEAD, color: C.green }}>SAY HELLO</p>
-          </Reveal>
           <Reveal delay={100}>
             <h1 className="text-white text-[44px] sm:text-[68px] leading-[0.92] font-light" style={{ fontFamily: HEAD, letterSpacing: ".02em" }}>
               CONTACT

@@ -1,6 +1,11 @@
 // Demo catalogue used until you connect Supabase (or add real products).
 import { siteImage } from "./supabase";
-const P = (o) => ({ colour: "bw", ratio: "landscape", image: null, ...o });
+import { inferAnimalTags } from "./product-tags";
+const P = (o) => {
+  const base = { colour: "bw", ratio: "landscape", image: null, animalTags: [], ...o };
+  if (!base.animalTags?.length) base.animalTags = inferAnimalTags(base);
+  return base;
+};
 
 export const MOCK_PRODUCTS = [
   P({ id: "leopard-colour", slug: "leopard-colour", name: "Leopard — Colour", category: "Big Cats", colour: "colour",

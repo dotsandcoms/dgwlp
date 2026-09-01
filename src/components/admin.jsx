@@ -3,12 +3,13 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation";
 import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings, Star, X, Users, FileText } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, ROOMS, CATEGORY_NAMES, rangeOf, artPlacement, colourFromCategory } from "@/lib/pricing";
+import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, CATEGORY_NAMES, rangeOf, colourFromCategory } from "@/lib/pricing";
+import { animalTagsFromInput, animalTagsToInput, ANIMAL_SUGGESTIONS, formatAnimalTag, inferAnimalTags } from "@/lib/product-tags";
 import { MOCK_PRODUCTS, MOCK_ORDERS, SALES } from "@/lib/mock";
 import { hasSupabase, imageUrl } from "@/lib/supabase";
 import { friendlyError } from "@/lib/errors";
 import * as db from "@/lib/admin-data";
-import { Plate, Scene, artworkStyle, Pill, StatusBadge } from "./primitives";
+import { Plate, Pill, StatusBadge } from "./primitives";
 import { LiveSettings, DemoSettings } from "./admin-settings";
 import { LiveFeatured, DemoFeatured } from "./admin-featured";
 import { LiveOrders } from "./admin-orders";
@@ -540,6 +541,31 @@ function LiveCategories({ categories, onChanged, toast }) {
   );
 }
 
+function ProductEditorPreview({ preview, colour, ratio, name, range, onSizes, onMats }) {
+  return (
+    <div className="lg:sticky lg:top-24 h-fit">
+      <h3 className="text-[13px] tracking-[.1em] mb-3 text-neutral-500" style={{ fontFamily: HEAD }}>LIVE CUSTOMER PREVIEW</h3>
+      <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
+        <div style={{ background: "#1a1a18", width: "100%", aspectRatio: RATIOS[ratio].ar }}>
+          <Plate
+            product={preview}
+            showSig={false}
+            fit="contain"
+            printColour={colour}
+            style={{ width: "100%", height: "100%", aspectRatio: RATIOS[ratio].ar }}
+          />
+        </div>
+        <div className="p-4">
+          <div className="text-[16px]" style={{ fontFamily: HEAD, color: C.green }}>{(name || "New Print").toUpperCase()}</div>
+          <div className="text-[15px] mt-1" style={{ fontFamily: HEAD }}>{onSizes.length ? `${zar(range[0])} – ${zar(range[1])}` : "Enable a size"}</div>
+          <div className="text-[12px] text-neutral-500 mt-2">Ratio · {RATIOS[ratio].label} · {onSizes.length} sizes · {onMats.length} finishes</div>
+        </div>
+      </div>
+      <p className="text-[12px] text-neutral-400 mt-3">Price range updates live as you edit the grid.</p>
+    </div>
+  );
+}
+
 function LiveEditor({ editingId, categories, toast, onSaved }) {
   const fileRef = useRef(null);
   const [loadingProduct, setLoadingProduct] = useState(Boolean(editingId));
@@ -550,12 +576,12 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
   const [ratio, setRatio] = useState("landscape");
   const [colour, setColour] = useState("colour");
   const [desc, setDesc] = useState("");
+  const [animalTagsInput, setAnimalTagsInput] = useState("");
   const [file, setFile] = useState(null);
   const [existingImage, setExistingImage] = useState(null); // hero_image path already on the product
   const [enabledSizes, setEnabledSizes] = useState({});
   const [enabledMats, setEnabledMats] = useState({ paper: true, paper_framed: true, canvas_rolled: true, canvas_framed: true, canvas_mounted: true });
   const [prices, setPrices] = useState({});
-  const [rooms, setRooms] = useState({ lounge: true, bedroom: true, study: false, gallery: true });
 
   useEffect(() => {
     if (!categoryId && categories.length) setCategoryId(categories[0].id);
@@ -578,11 +604,12 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
   useEffect(() => {
     if (!editingId) return;
     setLoadingProduct(true);
-    db.fetchProductForEdit(editingId).then(({ product, variants, roomIds }) => {
+    db.fetchProductForEdit(editingId).then(({ product, variants }) => {
       setName(product.name);
       setCategoryId(product.category_id || "");
       setRatio(product.ratio_id);
       setDesc(product.description || "");
+      setAnimalTagsInput(animalTagsToInput(product.animal_tags));
       setExistingImage(product.hero_image || null);
       const es = {}; const pr = {};
       variants.forEach((v) => {
@@ -591,9 +618,6 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
         if (mi != null) pr[`${v.size_id}:${mi}`] = v.price_cents / 100;
       });
       setEnabledSizes(es); setPrices(pr);
-      const rm = { lounge: false, bedroom: false, study: false, gallery: false };
-      roomIds.forEach((r) => { rm[r] = true; });
-      setRooms(rm);
     }).catch((e) => toast(friendlyError(e, "Failed to load print"))).finally(() => setLoadingProduct(false));
   }, [editingId, toast]);
 
@@ -607,7 +631,6 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
 
   const previewImage = file ? URL.createObjectURL(file) : imageUrl(existingImage);
   const preview = { image: previewImage, grad: colour === "colour" ? ["#7c5f36", "#d9c39a"] : ["#333", "#9a9a97"], angle: 120, name: name || "New Print", colour, ratio };
-  const firstRoom = Object.keys(rooms).find((r) => rooms[r]) || "gallery";
 
   const save = async () => {
     if (!name.trim()) return toast("Give the print a name");
@@ -625,11 +648,18 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
       let heroImage = existingImage;
       if (file) heroImage = await db.uploadPrintImage(file);
       const slug = db.slugify(name);
+      const catName = categories.find((c) => c.id === categoryId)?.name || "";
+      const tags = animalTagsFromInput(animalTagsInput);
+      const animal_tags = tags.length ? tags : inferAnimalTags({ name, desc, category: catName });
       await db.saveProduct({
         id: editingId,
-        fields: { name, slug, sku: slug, category_id: categoryId, ratio_id: ratio, colour, description: desc, hero_image: heroImage, is_published: true },
+        fields: {
+          name, slug, sku: slug, category_id: categoryId, ratio_id: ratio, colour,
+          description: desc, hero_image: heroImage, is_published: true,
+          animal_tags: animalTagsFromInput(animalTagsInput),
+        },
         variants,
-        roomIds: Object.keys(rooms).filter((r) => rooms[r]),
+        roomIds: [],
       });
       toast(editingId ? "Print updated" : "Print saved & published");
       onSaved();
@@ -660,7 +690,20 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
             <div className="relative"><select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select><ChevronDown size={16} className="absolute right-3 top-3.5 pointer-events-none" /></div>
             <div className="relative"><select value={ratio} onChange={(e) => setRatio(e.target.value)} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{Object.entries(RATIOS).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}</select><ChevronDown size={16} className="absolute right-3 top-3.5 pointer-events-none" /></div>
           </div>
-          <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" rows={3} className="w-full py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
+          <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" rows={3} className="w-full py-3 px-3 text-[14px] outline-none mb-3" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
+          <label className="block text-[12px] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>Animal tags</label>
+          <input
+            value={animalTagsInput}
+            onChange={(e) => setAnimalTagsInput(e.target.value)}
+            list="animal-tag-suggestions"
+            placeholder="e.g. Leopard, Lion"
+            className="w-full py-3 px-3 text-[14px] outline-none mb-1"
+            style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
+          />
+          <datalist id="animal-tag-suggestions">
+            {ANIMAL_SUGGESTIONS.map((a) => <option key={a} value={formatAnimalTag(a)} />)}
+          </datalist>
+          <p className="text-[12px] text-neutral-500 mb-3">Comma-separated — powers shop search (e.g. “leopard”, “lion”).</p>
           <div className="mt-3 text-[14px] text-neutral-600">
             Print colour: <span style={{ fontFamily: HEAD, color: C.ink }}>{colour === "bw" ? "Black & White" : "Colour"}</span>
             <span className="block text-[12px] text-neutral-500 mt-1">Set by category — only “Black & White” prints are mono.</span>
@@ -681,36 +724,10 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
             </table>
           </div>
         </div>
-        <div>
-          <h3 className="text-[15px] mb-3" style={{ fontFamily: HEAD }}>4 · Room previews to show</h3>
-          <div className="flex gap-4 flex-wrap">{ROOMS.map((r) => (<label key={r.id} className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={!!rooms[r.id]} onChange={(e) => setRooms({ ...rooms, [r.id]: e.target.checked })} /> {r.label}</label>))}</div>
-        </div>
         <Pill onClick={save} disabled={saving}>{saving ? <><Loader2 size={14} className="animate-spin inline mr-1" /> Saving…</> : (editingId ? "Save changes" : "Save & publish print")}</Pill>
       </div>
 
-      <div className="lg:sticky lg:top-24 h-fit">
-        <h3 className="text-[13px] tracking-[.1em] mb-3 text-neutral-500" style={{ fontFamily: HEAD }}>LIVE CUSTOMER PREVIEW</h3>
-        <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
-          <div style={{ position: "relative", width: "100%", aspectRatio: "4/3" }}>
-            <Scene room={firstRoom} />
-            {(() => {
-              const sz = onSizes[onSizes.length - 1] || RATIOS[ratio].sizes[0];
-              const place = artPlacement(sz, firstRoom, ratio);
-              return (
-                <div style={{ position: "absolute", top: `${place.topPct}%`, left: `${place.leftPct}%`, transform: "translate(-50%,-50%)", width: `${place.widthPct}%` }}>
-                  <div style={artworkStyle(onMats.find((m) => m.framed) ? "paper_framed" : "paper", "black")}><Plate product={preview} showSig={false} style={{ width: "100%", aspectRatio: RATIOS[ratio].ar }} /></div>
-                </div>
-              );
-            })()}
-          </div>
-          <div className="p-4">
-            <div className="text-[16px]" style={{ fontFamily: HEAD, color: C.green }}>{(name || "New Print").toUpperCase()}</div>
-            <div className="text-[15px] mt-1" style={{ fontFamily: HEAD }}>{onSizes.length ? `${zar(range[0])} – ${zar(range[1])}` : "Enable a size"}</div>
-            <div className="text-[12px] text-neutral-500 mt-2">{RATIOS[ratio].label} · {onSizes.length} sizes · {onMats.length} finishes · {Object.values(rooms).filter(Boolean).length} rooms</div>
-          </div>
-        </div>
-        <p className="text-[12px] text-neutral-400 mt-3">Exactly what shoppers see. Price range updates live as you edit the grid.</p>
-      </div>
+      <ProductEditorPreview preview={preview} colour={colour} ratio={ratio} name={name} range={range} onSizes={onSizes} onMats={onMats} />
     </div>
   );
 }
@@ -992,7 +1009,6 @@ function DemoEditor({ toast }) {
   const [enabledSizes, setEnabledSizes] = useState({});
   const [enabledMats, setEnabledMats] = useState({ paper: true, paper_framed: true, canvas_rolled: true, canvas_framed: true, canvas_mounted: true });
   const [prices, setPrices] = useState({});
-  const [rooms, setRooms] = useState({ lounge: true, bedroom: true, study: false, gallery: true });
 
   useEffect(() => {
     setColour(colourFromCategory(category));
@@ -1013,7 +1029,6 @@ function DemoEditor({ toast }) {
   }, [onSizes, onMats, prices]);
 
   const preview = { grad: colour === "colour" ? ["#7c5f36", "#d9c39a"] : ["#333", "#9a9a97"], angle: 120, name: name || "New Print", colour, ratio };
-  const firstRoom = Object.keys(rooms).find((r) => rooms[r]) || "gallery";
 
   return (
     <div className="grid lg:grid-cols-3 gap-8">
@@ -1021,7 +1036,7 @@ function DemoEditor({ toast }) {
         <div>
           <h3 className="text-[15px] mb-3" style={{ fontFamily: HEAD }}>1 · Upload the photograph</h3>
           <button onClick={() => { setUploaded(true); toast("Image uploaded"); }} className="w-full flex flex-col items-center justify-center py-12 rounded-lg" style={{ border: `2px dashed ${uploaded ? C.green : C.line}`, background: uploaded ? C.greenSoft : "#fafafa" }}>
-            {uploaded ? <><Check size={26} color={C.green} /><span className="text-[14px] mt-2" style={{ fontFamily: HEAD }}>photograph.jpg uploaded</span><span className="text-[12px] text-neutral-500">Room mock-ups auto-generated for enabled scenes</span></>
+            {uploaded ? <><Check size={26} color={C.green} /><span className="text-[14px] mt-2" style={{ fontFamily: HEAD }}>photograph.jpg uploaded</span><span className="text-[12px] text-neutral-500">Click to replace</span></>
               : <><Upload size={26} color={C.gray} /><span className="text-[14px] mt-2" style={{ fontFamily: HEAD }}>Drag & drop or click to upload</span><span className="text-[12px] text-neutral-500">High-res JPG/PNG · we handle resizing & watermarking</span></>}
           </button>
         </div>
@@ -1053,36 +1068,10 @@ function DemoEditor({ toast }) {
             </table>
           </div>
         </div>
-        <div>
-          <h3 className="text-[15px] mb-3" style={{ fontFamily: HEAD }}>4 · Room previews to show</h3>
-          <div className="flex gap-4 flex-wrap">{ROOMS.map((r) => (<label key={r.id} className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={!!rooms[r.id]} onChange={(e) => setRooms({ ...rooms, [r.id]: e.target.checked })} /> {r.label}</label>))}</div>
-        </div>
         <Pill onClick={() => toast("Print saved & published")}>Save & publish print</Pill>
       </div>
 
-      <div className="lg:sticky lg:top-24 h-fit">
-        <h3 className="text-[13px] tracking-[.1em] mb-3 text-neutral-500" style={{ fontFamily: HEAD }}>LIVE CUSTOMER PREVIEW</h3>
-        <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
-          <div style={{ position: "relative", width: "100%", aspectRatio: "4/3" }}>
-            <Scene room={firstRoom} />
-            {(() => {
-              const sz = onSizes[onSizes.length - 1] || RATIOS[ratio].sizes[0];
-              const place = artPlacement(sz, firstRoom, ratio);
-              return (
-                <div style={{ position: "absolute", top: `${place.topPct}%`, left: `${place.leftPct}%`, transform: "translate(-50%,-50%)", width: `${place.widthPct}%` }}>
-                  <div style={artworkStyle(onMats.find((m) => m.framed) ? "paper_framed" : "paper", "black")}><Plate product={preview} showSig={false} style={{ width: "100%", aspectRatio: RATIOS[ratio].ar }} /></div>
-                </div>
-              );
-            })()}
-          </div>
-          <div className="p-4">
-            <div className="text-[16px]" style={{ fontFamily: HEAD, color: C.green }}>{(name || "New Print").toUpperCase()}</div>
-            <div className="text-[15px] mt-1" style={{ fontFamily: HEAD }}>{onSizes.length ? `${zar(range[0])} – ${zar(range[1])}` : "Enable a size"}</div>
-            <div className="text-[12px] text-neutral-500 mt-2">{RATIOS[ratio].label} · {onSizes.length} sizes · {onMats.length} finishes · {Object.values(rooms).filter(Boolean).length} rooms</div>
-          </div>
-        </div>
-        <p className="text-[12px] text-neutral-400 mt-3">Exactly what shoppers see. Price range updates live as you edit the grid.</p>
-      </div>
+      <ProductEditorPreview preview={preview} colour={colour} ratio={ratio} name={name} range={range} onSizes={onSizes} onMats={onMats} />
     </div>
   );
 }

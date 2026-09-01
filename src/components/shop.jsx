@@ -1,21 +1,16 @@
 "use client";
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, startTransition } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Heart, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { C, HEAD } from "@/lib/pricing";
 import { siteImage } from "@/lib/supabase";
 import { Reveal } from "./primitives";
+import { matchProductQuery } from "@/lib/product-tags";
 import { Card } from "./home";
 import { useToast } from "@/context/providers";
 
 const PAGE_SIZE = 20;
-
-function matchQuery(p, q) {
-  if (!q.trim()) return true;
-  const hay = `${p.name || ""} ${p.category || ""} ${p.desc || ""} ${p.sku || ""}`.toLowerCase();
-  return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
-}
 
 /**
  * Expanding bush gallery — atmosphere after the print grid.
@@ -212,7 +207,10 @@ export function ShopClient({ products, categories }) {
     if (nextCat && nextCat !== "All") params.set("category", nextCat);
     if (nextQ.trim()) params.set("q", nextQ.trim());
     const qs = params.toString();
-    router.replace(qs ? `/shop?${qs}` : "/shop", { scroll: false });
+    const href = qs ? `/shop?${qs}` : "/shop";
+    startTransition(() => {
+      router.replace(href, { scroll: false });
+    });
   };
 
   const toggle = (id) => setWish((w) => {
@@ -223,7 +221,7 @@ export function ShopClient({ products, categories }) {
   });
 
   const filtered = useMemo(() => {
-    return products.filter((p) => (cat === "All" || p.category === cat) && matchQuery(p, query));
+    return products.filter((p) => (cat === "All" || p.category === cat) && matchProductQuery(p, query));
   }, [products, cat, query]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -336,7 +334,7 @@ export function ShopClient({ products, categories }) {
                 onChange={(e) => onSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && commitSearch()}
                 onBlur={commitSearch}
-                placeholder="Search prints…"
+                placeholder="Search by animal or print name…"
                 className="flex-1 py-2.5 text-[14px] outline-none bg-transparent"
               />
               {query && (
@@ -376,7 +374,7 @@ export function ShopClient({ products, categories }) {
           </p>
         ) : (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 sm:gap-x-7 gap-y-10 sm:gap-y-14">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-5 sm:gap-x-7 gap-y-10 sm:gap-y-14">
               {pageItems.map((p, i) => (
                 <Reveal key={p.id} delay={(i % 4) * 70}>
                   <div className="relative group">
@@ -388,7 +386,7 @@ export function ShopClient({ products, categories }) {
                     >
                       <Heart size={16} color={wish.includes(p.id) ? "#c0392b" : C.gray} fill={wish.includes(p.id) ? "#c0392b" : "none"} />
                     </button>
-                    <Card p={p} />
+                    <Card p={p} tileAspect="4 / 5" />
                   </div>
                 </Reveal>
               ))}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, ShoppingBag, User, Minus, Plus, Trash2, Check, ShieldCheck, Search } from "lucide-react";
 import { C, HEAD, colourFromCategory } from "@/lib/pricing";
+import { matchProductQuery, inferAnimalTags, primaryAnimalLabel } from "@/lib/product-tags";
 import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { Plate, Pill, Row } from "./primitives";
 import { useCart, useAuth, useToast, useAuthModal } from "@/context/providers";
@@ -139,10 +140,10 @@ function AccountMenu({ align = "right" }) {
   );
 }
 
-function matchQuery(p, q) {
-  if (!q) return true;
-  const hay = `${p.name || ""} ${p.category || ""} ${p.desc || p.description || ""} ${p.sku || ""}`.toLowerCase();
-  return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+function searchResultMeta(p) {
+  const animal = primaryAnimalLabel(p);
+  const parts = [animal, p.category].filter(Boolean);
+  return parts.join(" · ");
 }
 
 function SiteSearch({ open, onClose }) {
@@ -171,12 +172,18 @@ function SiteSearch({ open, onClose }) {
       try {
         if (hasSupabase) {
           const sb = browserClient();
-          const { data } = await sb.from("products")
-            .select("id,slug,name,sku,colour,hero_image,description,categories(name)")
+          const { data, error } = await sb.from("products")
+            .select("id,slug,name,sku,colour,hero_image,description,animal_tags,categories(name)")
             .eq("is_published", true)
             .order("name");
           if (cancelled) return;
-          setProducts((data || []).map((row) => ({
+          const rows = error && /animal_tags/i.test(error.message || "")
+            ? (await sb.from("products")
+              .select("id,slug,name,sku,colour,hero_image,description,categories(name)")
+              .eq("is_published", true)
+              .order("name")).data
+            : data;
+          setProducts((rows || []).map((row) => ({
             id: row.id,
             slug: row.slug,
             name: row.name,
@@ -184,6 +191,7 @@ function SiteSearch({ open, onClose }) {
             colour: colourFromCategory(row.categories?.name),
             desc: row.description || "",
             category: row.categories?.name || "",
+            animalTags: inferAnimalTags({ animalTags: row.animal_tags, name: row.name, category: row.categories?.name }),
             image: imageUrl(row.hero_image),
             grad: ["#333", "#9a9a97"],
             angle: 120,
@@ -202,7 +210,7 @@ function SiteSearch({ open, onClose }) {
 
   const results = useMemo(() => {
     if (!q.trim()) return [];
-    return products.filter((p) => matchQuery(p, q)).slice(0, 12);
+    return products.filter((p) => matchProductQuery(p, q)).slice(0, 12);
   }, [products, q]);
 
   const goShop = () => {
@@ -225,7 +233,7 @@ function SiteSearch({ open, onClose }) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") goShop(); }}
-              placeholder="Search prints, categories…"
+              placeholder="Search by animal, print name…"
               className="flex-1 py-3 text-[18px] outline-none bg-transparent"
               style={{ fontFamily: HEAD }}
             />
@@ -248,7 +256,7 @@ function SiteSearch({ open, onClose }) {
                 <Plate product={p} showSig={false} style={{ width: 48, height: 48, borderRadius: 4, flexShrink: 0 }} />
                 <div className="min-w-0 flex-1">
                   <div className="text-[15px] truncate" style={{ fontFamily: HEAD }}>{p.name}</div>
-                  <div className="text-[12px] text-neutral-500">{p.category}</div>
+                  <div className="text-[12px] text-neutral-500">{searchResultMeta(p)}</div>
                 </div>
               </Link>
             ))}
@@ -258,7 +266,7 @@ function SiteSearch({ open, onClose }) {
               </button>
             )}
             {!loading && !q.trim() && (
-              <p className="text-[13px] text-neutral-500 py-6">Type a print name or category — or browse the <Link href="/shop" onClick={onClose} style={{ color: C.green }}>shop</Link>.</p>
+              <p className="text-[13px] text-neutral-500 py-6">Type an animal, print name or category — or browse the <Link href="/shop" onClick={onClose} style={{ color: C.green }}>shop</Link>.</p>
             )}
           </div>
         </div>

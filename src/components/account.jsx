@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, startTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -27,7 +27,9 @@ export function AuthView() {
     const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/account";
     const mode = tab === "register" ? "register" : "login";
     openAuth(mode, next);
-    router.replace("/");
+    startTransition(() => {
+      router.replace("/");
+    });
   }, [openAuth, router, searchParams]);
 
   return (

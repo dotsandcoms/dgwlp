@@ -73,3 +73,13 @@ body {
 .pac-item { padding: 8px 12px; cursor: pointer; }
 .pac-item:hover { background: #f4f6ef; }
 .pac-item-query { color: #1a1a1a; }
+
+/* Detect Chrome/Safari autofill so password fields can sync into React state */
+@keyframes dg-autofill-start {
+  from { opacity: 1; }
+  to { opacity: 1; }
+}
+input.dg-password-input:-webkit-autofill {
+  animation-name: dg-autofill-start;
+  animation-duration: 0.01s;
+}

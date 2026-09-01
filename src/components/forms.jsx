@@ -43,7 +43,14 @@ export function RegisterForm({ onDone, compact }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 min-w-0">
         <input placeholder="Full name" value={f.name} onChange={set("name")} autoComplete="name" {...inp} />
         <input placeholder="Email address" type="email" value={f.email} onChange={set("email")} autoComplete="email" {...inp} />
-        <PasswordInput value={f.pass} onChange={set("pass")} placeholder="Password" autoComplete="new-password" {...inp} />
+        <PasswordInput
+          value={f.pass}
+          onChange={set("pass")}
+          placeholder="Password"
+          autoComplete="new-password"
+          className={inp.className}
+          style={inp.style}
+        />
         <input placeholder="Mobile number" value={f.phone} onChange={set("phone")} autoComplete="tel" {...inp} />
       </div>
 

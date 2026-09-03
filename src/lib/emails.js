@@ -10,13 +10,27 @@
 
 import { browserClient, hasSupabase } from "@/lib/supabase";
 
+/** Normalize line items so the email template always gets an absolute image URL when available. */
+function mapEmailItems(items) {
+  return (Array.isArray(items) ? items : []).map((i) => ({
+    name: i?.name,
+    summary: i?.summary,
+    material: i?.material || i?.material_id,
+    size: i?.size || i?.size_id,
+    frameCol: i?.frameCol || i?.frame_colour_id,
+    qty: i?.qty || 1,
+    price: i?.price,
+    image: i?.image || i?.imageUrl || i?.product?.image || null,
+  }));
+}
+
 /** Build variables for order status templates from an order-shaped object. */
 export function orderEmailVariables(order = {}, status) {
   return {
     orderId: order.order_no || order.id,
     id: order.order_no || order.id,
     email: order.email,
-    items: order.lines || order.items || [],
+    items: mapEmailItems(order.lines || order.items || []),
     subtotal: order.subtotal,
     shipping: order.shipping,
     total: order.total,
@@ -88,10 +102,30 @@ export async function sendEmailServer({ to, template, variables, bcc } = {}) {
 export async function sendOrderStatusEmailClient(order, status) {
   const to = order?.email;
   if (!to) return { skipped: true };
+
+  // Prefer lines that already have images (admin enrich / cart); otherwise look them up.
+  let payload = order;
+  try {
+    const needsImages = (order.lines || order.items || []).some((i) => i?.name && !i?.image);
+    if (needsImages && hasSupabase) {
+      const sb = browserClient();
+      if (sb) {
+        const { enrichOrdersWithImages } = await import("@/lib/orders");
+        const [enriched] = await enrichOrdersWithImages(sb, [{
+          ...order,
+          lines: order.lines || order.items || [],
+        }]);
+        if (enriched) payload = { ...order, lines: enriched.lines, items: enriched.lines };
+      }
+    }
+  } catch {
+    // still send without images
+  }
+
   return sendEmail({
     to,
     template: status || "receipt",
-    variables: orderEmailVariables(order, status),
+    variables: orderEmailVariables(payload, status),
   });
 }
 

@@ -100,6 +100,22 @@ function zar(n) {
   return "R" + Number(n || 0).toLocaleString("en-ZA");
 }
 
+/** Only absolute http(s) URLs are safe/useful in email clients. */
+export function safeEmailImageUrl(raw) {
+  const s = scrubText(String(raw || ""), 500);
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  return null;
+}
+
+function itemThumbHtml(imageUrl, name) {
+  const src = safeEmailImageUrl(imageUrl);
+  if (src) {
+    return `<img src="${escapeHtml(src)}" alt="${escapeHtml(name || "Print")}" width="64" height="64" style="display:block;width:64px;height:64px;object-fit:cover;border-radius:4px;background:${BRAND.wall};border:0;" />`;
+  }
+  return `<div style="width:64px;height:64px;border-radius:4px;background:${BRAND.wall};border:1px solid ${BRAND.line};"></div>`;
+}
+
 /** Turn raw DB ids into storefront-style line summaries. */
 export function formatItemSummary(item) {
   if (item?.summary && String(item.summary).trim()) {
@@ -174,14 +190,22 @@ export function buildOrderEmailHtml({ type, order }) {
       const unit = Number(i?.price) || 0;
       const line = unit * qty;
       const border = idx === 0 ? "none" : `1px solid ${BRAND.line}`;
+      const thumb = itemThumbHtml(i?.image || i?.imageUrl || i?.hero_image, name);
       return `
         <tr>
           <td style="padding:16px 0;border-top:${border};vertical-align:top;">
-            <div style="font-family:Jost,Poppins,Century Gothic,Futura,Arial,sans-serif;font-size:15px;font-weight:500;color:${BRAND.ink};letter-spacing:0.02em;">
-              ${escapeHtml(name)}
-            </div>
-            ${summary ? `<div style="font-family:Poppins,Arial,sans-serif;font-size:12px;color:${BRAND.gray};margin-top:4px;line-height:1.45;">${escapeHtml(summary)}</div>` : ""}
-            <div style="font-family:Poppins,Arial,sans-serif;font-size:12px;color:${BRAND.gray};margin-top:6px;">Qty ${qty}${unit ? ` · ${zar(unit)} each` : ""}</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td width="72" valign="top" style="width:72px;padding-right:12px;">${thumb}</td>
+                <td valign="top" style="font-family:Poppins,Arial,sans-serif;">
+                  <div style="font-family:Jost,Poppins,Century Gothic,Futura,Arial,sans-serif;font-size:15px;font-weight:500;color:${BRAND.ink};letter-spacing:0.02em;">
+                    ${escapeHtml(name)}
+                  </div>
+                  ${summary ? `<div style="font-size:12px;color:${BRAND.gray};margin-top:4px;line-height:1.45;">${escapeHtml(summary)}</div>` : ""}
+                  <div style="font-size:12px;color:${BRAND.gray};margin-top:6px;">Qty ${qty}${unit ? ` · ${zar(unit)} each` : ""}</div>
+                </td>
+              </tr>
+            </table>
           </td>
           <td align="right" style="padding:16px 0;border-top:${border};vertical-align:top;white-space:nowrap;font-family:Jost,Poppins,Arial,sans-serif;font-size:14px;color:${BRAND.ink};">
             ${zar(line)}
@@ -371,9 +395,9 @@ export function sampleOrderForPreview(type = "shipped") {
     id: "DG-1042",
     email: "collector@example.com",
     date: "3 Sep 2026",
-    subtotal: 9200,
+    subtotal: 5400,
     shipping: 0,
-    total: 9200,
+    total: 5400,
     tracking: type === "shipped" || type === "shipping" || type === "delivered" ? "CPX-884291SA" : null,
     delivery: {
       name: "Thandi Molefe",
@@ -388,16 +412,18 @@ export function sampleOrderForPreview(type = "shipped") {
     },
     items: [
       {
-        name: "Leopard — Colour",
-        summary: "Paper — framed · 1200 × 800 mm · Black",
+        name: "Shadowed King",
+        summary: "Paper — unframed · 400 × 300 mm · Black",
         qty: 1,
-        price: 5300,
+        price: 1500,
+        image: "https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=128&h=128&q=80",
       },
       {
         name: "Elephant Herd",
         summary: "Canvas — mounted · 1200 × 600 mm",
         qty: 1,
         price: 3900,
+        image: "https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?auto=format&fit=crop&w=128&h=128&q=80",
       },
     ],
   };
@@ -414,6 +440,7 @@ export function orderPayloadFromDbRow(row) {
     summary: formatItemSummary(i),
     qty: i.qty || 1,
     price: (i.unit_price_cents || 0) / 100,
+    image: null,
   }));
   return {
     id: row.order_no || row.id,
@@ -428,6 +455,39 @@ export function orderPayloadFromDbRow(row) {
     date: row.created_at
       ? new Date(row.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
       : undefined,
+  };
+}
+
+/**
+ * Attach public print image URLs to email line items by product name.
+ * @param {import("@supabase/supabase-js").SupabaseClient} sb
+ * @param {object} order
+ */
+export async function enrichOrderEmailImages(sb, order) {
+  if (!sb || !order) return order;
+  const items = Array.isArray(order.items) ? order.items : [];
+  const names = [...new Set(items.map((i) => i?.name).filter(Boolean))];
+  if (!names.length) return order;
+
+  const { data: products, error } = await sb
+    .from("products")
+    .select("name,hero_image")
+    .in("name", names);
+  if (error || !products?.length) return order;
+
+  const { imageUrl } = await import("@/lib/supabase");
+  const byName = new Map(
+    products.map((p) => [String(p.name || "").trim().toLowerCase(), p])
+  );
+
+  return {
+    ...order,
+    items: items.map((item) => {
+      if (safeEmailImageUrl(item?.image)) return item;
+      const p = byName.get(String(item?.name || "").trim().toLowerCase());
+      if (!p?.hero_image) return item;
+      return { ...item, image: imageUrl(p.hero_image) };
+    }),
   };
 }
 
@@ -451,7 +511,8 @@ export async function sendOrderStatusEmailByOrderNo(sb, orderNo, type) {
     .eq("order_no", orderNo)
     .maybeSingle();
   if (error || !data) return { skipped: true, error: error?.message };
-  return sendOrderStatusEmail({ type, order: orderPayloadFromDbRow(data) });
+  const order = await enrichOrderEmailImages(sb, orderPayloadFromDbRow(data));
+  return sendOrderStatusEmail({ type, order });
 }
 
 /**
@@ -498,10 +559,21 @@ export async function sendOrderStatusEmail({ type, order }) {
   const subject = STATUS_COPY[resolved].subject(orderId);
   const html = buildOrderEmailHtml({ type: resolved, order });
 
+  const ordersBcc = (
+    process.env.ORDERS_BCC ||
+    process.env.ORDERS_TO ||
+    from.match(/<([^>]+)>/)?.[1] ||
+    "orders@dgwlp.co.za"
+  ).trim().toLowerCase();
+  const payload = { from, to: email, subject, html };
+  if (looksLikeEmail(ordersBcc) && ordersBcc !== email.toLowerCase()) {
+    payload.bcc = [ordersBcc];
+  }
+
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: email, subject, html }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {

@@ -161,6 +161,30 @@ function looksLikeEmail(v: unknown) {
     v.length < 254;
 }
 
+function safeEmailImageUrl(raw: unknown) {
+  const s = scrub(raw, 500);
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  return null;
+}
+
+function printImageUrl(heroPath: unknown) {
+  const clean = scrub(heroPath, 300).replace(/^\/+/, "");
+  if (!clean) return null;
+  if (/^https?:\/\//i.test(clean)) return clean;
+  const base = (Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "");
+  if (!base) return null;
+  return `${base}/storage/v1/object/public/prints/${clean}`;
+}
+
+function itemThumbHtml(imageUrl: unknown, name: string) {
+  const src = safeEmailImageUrl(imageUrl);
+  if (src) {
+    return `<img src="${escapeHtml(src)}" alt="${escapeHtml(name || "Print")}" width="64" height="64" style="display:block;width:64px;height:64px;object-fit:cover;border-radius:4px;background:${BRAND.wall};border:0;" />`;
+  }
+  return `<div style="width:64px;height:64px;border-radius:4px;background:${BRAND.wall};border:1px solid ${BRAND.line};"></div>`;
+}
+
 function siteUrl() {
   return (Deno.env.get("SITE_URL") || Deno.env.get("NEXT_PUBLIC_SITE_URL") ||
     "https://dgwlp.vercel.app").replace(/\/$/, "");
@@ -214,12 +238,20 @@ function buildOrderEmailHtml(template: string, vars: Record<string, unknown>) {
     const unit = Number(i.price) || 0;
     const line = unit * qty;
     const border = idx === 0 ? "none" : `1px solid ${BRAND.line}`;
+    const thumb = itemThumbHtml(i.image || i.imageUrl || i.hero_image, name);
     return `
       <tr>
         <td style="padding:16px 0;border-top:${border};vertical-align:top;">
-          <div style="font-family:Jost,Poppins,Arial,sans-serif;font-size:15px;font-weight:500;color:${BRAND.ink};">${escapeHtml(name)}</div>
-          ${summary ? `<div style="font-family:Poppins,Arial,sans-serif;font-size:12px;color:${BRAND.gray};margin-top:4px;line-height:1.45;">${escapeHtml(summary)}</div>` : ""}
-          <div style="font-family:Poppins,Arial,sans-serif;font-size:12px;color:${BRAND.gray};margin-top:6px;">Qty ${qty}${unit ? ` · ${zar(unit)} each` : ""}</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td width="72" valign="top" style="width:72px;padding-right:12px;">${thumb}</td>
+              <td valign="top" style="font-family:Poppins,Arial,sans-serif;">
+                <div style="font-family:Jost,Poppins,Arial,sans-serif;font-size:15px;font-weight:500;color:${BRAND.ink};">${escapeHtml(name)}</div>
+                ${summary ? `<div style="font-size:12px;color:${BRAND.gray};margin-top:4px;line-height:1.45;">${escapeHtml(summary)}</div>` : ""}
+                <div style="font-size:12px;color:${BRAND.gray};margin-top:6px;">Qty ${qty}${unit ? ` · ${zar(unit)} each` : ""}</div>
+              </td>
+            </tr>
+          </table>
         </td>
         <td align="right" style="padding:16px 0;border-top:${border};vertical-align:top;white-space:nowrap;font-family:Jost,Poppins,Arial,sans-serif;font-size:14px;color:${BRAND.ink};">${zar(line)}</td>
       </tr>`;
@@ -333,6 +365,46 @@ function buildOrderEmailHtml(template: string, vars: Record<string, unknown>) {
   return { subject, html };
 }
 
+async function enrichItemImages(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  items: unknown[],
+) {
+  const list = items.map((raw) =>
+    raw && typeof raw === "object" ? { ...(raw as Record<string, unknown>) } : {}
+  );
+  const names = [
+    ...new Set(
+      list
+        .filter((i) => i.name && !safeEmailImageUrl(i.image || i.imageUrl || i.hero_image))
+        .map((i) => String(i.name)),
+    ),
+  ];
+  if (!names.length) return list;
+
+  try {
+    const { data } = await supabaseAdmin
+      .from("products")
+      .select("name,hero_image")
+      .in("name", names);
+    if (!data?.length) return list;
+    const byName = new Map(
+      data.map((p: { name?: string; hero_image?: string }) => [
+        String(p.name || "").trim().toLowerCase(),
+        p,
+      ]),
+    );
+    return list.map((item) => {
+      if (safeEmailImageUrl(item.image || item.imageUrl || item.hero_image)) return item;
+      const p = byName.get(String(item.name || "").trim().toLowerCase());
+      if (!p?.hero_image) return item;
+      return { ...item, image: printImageUrl(p.hero_image) };
+    });
+  } catch (err) {
+    console.error("Product image enrichment failed:", (err as Error).message);
+    return list;
+  }
+}
+
 function generateEmailBody(template: string, vars: Record<string, unknown>) {
   if (ORDER_TEMPLATES.has(template)) {
     return buildOrderEmailHtml(template, vars);
@@ -371,6 +443,31 @@ function resolveFromAddress() {
     return `Doron Goldstein Photography <${verified}>`;
   }
   return `Doron Goldstein Photography <noreply@${verified}>`;
+}
+
+/** Shop inbox that always BCC's order emails (customer still gets `to`). */
+function resolveOrdersInbox() {
+  const explicit = scrub(Deno.env.get("ORDERS_BCC") || Deno.env.get("ORDERS_TO") || "", 254);
+  if (looksLikeEmail(explicit)) return explicit.toLowerCase();
+  const from = resolveFromAddress();
+  const parsed = from.match(/<([^>]+)>/)?.[1] || "";
+  if (looksLikeEmail(parsed)) return parsed.toLowerCase();
+  return "orders@dgwlp.co.za";
+}
+
+function mergeBcc(
+  existing: string[] | undefined,
+  extras: string[],
+  exclude: string[] = [],
+) {
+  const skip = new Set(exclude.map((e) => e.toLowerCase()));
+  const out = new Set<string>();
+  for (const e of [...(existing || []), ...extras]) {
+    const v = scrub(e, 254).toLowerCase();
+    if (!looksLikeEmail(v) || skip.has(v)) continue;
+    out.add(v);
+  }
+  return [...out];
 }
 
 serve(async (req: Request) => {
@@ -418,6 +515,16 @@ serve(async (req: Request) => {
       if (primaryTo) emailVars.recipientEmail = primaryTo;
     }
 
+    // Always have an admin client for image enrichment (and auth already created one path).
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    );
+
+    if (Array.isArray(emailVars.items)) {
+      emailVars.items = await enrichItemImages(supabaseAdmin, emailVars.items as unknown[]);
+    }
+
     const resolvedTemplate = ORDER_TEMPLATES.has(String(template))
       ? String(template)
       : String(template || "receipt");
@@ -426,7 +533,14 @@ serve(async (req: Request) => {
     let finalTo = to ? (Array.isArray(to) ? to : [to]) : undefined;
     let finalBcc = bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : undefined;
     finalTo = finalTo?.map((e) => scrub(e, 254)).filter(looksLikeEmail);
-    finalBcc = finalBcc?.map((e) => scrub(e, 254)).filter(looksLikeEmail);
+
+    // Always BCC the shop inbox on order templates so admin sees every status email.
+    if (ORDER_TEMPLATES.has(resolvedTemplate)) {
+      finalBcc = mergeBcc(finalBcc, [resolveOrdersInbox()], finalTo || []);
+    } else {
+      finalBcc = mergeBcc(finalBcc, [], finalTo || []);
+    }
+
     if ((!finalTo || !finalTo.length) && (!finalBcc || !finalBcc.length)) {
       throw new Error("No valid recipient email");
     }
@@ -444,7 +558,7 @@ serve(async (req: Request) => {
     }
 
     console.info(
-      `Dispatching Resend template [${resolvedTemplate}] to ${(finalTo || []).join(", ") || "bcc-only"}`,
+      `Dispatching Resend template [${resolvedTemplate}] to ${(finalTo || []).join(", ") || "bcc-only"} bcc=${(finalBcc || []).join(", ") || "none"}`,
     );
 
     const response = await fetch("https://api.resend.com/emails", {

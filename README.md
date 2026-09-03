@@ -69,9 +69,18 @@ Use sandbox credentials while testing.
 
 ## 4. Email (Resend)
 
-`src/app/api/email/route.js` sends order receipts via Resend. Add `RESEND_API_KEY` and
-`EMAIL_FROM` (a verified domain). It no-ops safely if unset. Wire the shipping-confirmation
-email from the admin "mark as shipped" action.
+Order emails go out on checkout (receipt), payment confirmation (`paid` from Paystack/PayFast
+webhooks), and every admin status change (pending → paid → shipped → delivered, plus
+cancelled / refunded). Shared sender: `src/lib/order-email.js`.
+
+1. Create an API key at [resend.com](https://resend.com) → API Keys.
+2. Verify your sending domain (e.g. `dgwlp.co.za`) and use a from-address on that domain.
+3. Set in `.env.local` and Vercel:
+   - `RESEND_API_KEY=re_…`
+   - `EMAIL_FROM="Doron Goldstein Photography <orders@dgwlp.co.za>"`
+   - Optional: `CONTACT_TO=` for the contact-form inbox (defaults to the address in `EMAIL_FROM`)
+
+Without `RESEND_API_KEY`, sends no-op safely so checkout and admin still work.
 
 ---
 

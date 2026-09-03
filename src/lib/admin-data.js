@@ -325,8 +325,8 @@ export async function updateOrderStatus(id, status) {
 }
 
 /**
- * Fire a transactional email for a status change.
- * Safe to call before Resend templates exist — /api/email no-ops without a key.
+ * Fire a transactional email for a status change via /api/email (Resend).
+ * No-ops when RESEND_API_KEY is unset.
  */
 export async function notifyOrderStatusEmail(order, status) {
   if (!order?.email) return { skipped: true };

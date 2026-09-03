@@ -165,12 +165,14 @@ function AdminOrderModal({ orderId, onClose, onChanged, toast }) {
       toast?.(`Order ${updated.order_no} updated`);
       onChanged?.();
 
-      // Status emails are wired here; /api/email no-ops until Resend templates are ready.
+      // Email the customer on every status change (Resend; no-ops without RESEND_API_KEY).
       if (statusChanged) {
         const mail = await db.notifyOrderStatusEmail(updated, status);
         if (mail?.ok) toast?.(`Customer notified (${status})`);
         else if (mail?.skipped) {
-          // Quiet — RESEND_API_KEY missing or invalid email is expected for now
+          // Quiet when email is not configured or address is invalid
+        } else if (mail?.error) {
+          toast?.("Order updated, but the customer email failed to send");
         }
       }
     } catch (e) {

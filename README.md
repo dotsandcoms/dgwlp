@@ -67,11 +67,38 @@ Use sandbox credentials while testing.
 
 ---
 
-## 4. Email (Resend)
+## 4. Email (Resend + Supabase `send-email` edge function)
 
-`src/app/api/email/route.js` sends order receipts via Resend. Add `RESEND_API_KEY` and
-`EMAIL_FROM` (a verified domain). It no-ops safely if unset. Wire the shipping-confirmation
-email from the admin "mark as shipped" action.
+Order emails go out on checkout (receipt), payment confirmation (`paid` from Paystack/PayFast
+webhooks), and every admin status change. Delivery is handled by the Supabase edge function
+**`send-email`** (same pattern as other Dots projects).
+
+### Deploy the function
+
+```bash
+supabase functions deploy send-email --project-ref flbskxcwywqiqrhofrqx
+supabase secrets set RESEND_API_KEY=re_… EMAIL_FROM="Doron Goldstein Photography <orders@dgwlp.co.za>" SITE_URL=https://your-domain
+```
+
+Secrets needed on the function: `RESEND_API_KEY`, `EMAIL_FROM` (verified domain), optional `SITE_URL`.
+
+### Invoke from the app
+
+```js
+import { sendEmail } from "@/lib/emails";
+
+await sendEmail({
+  to: customerEmail,
+  template: "shipped", // receipt | pending | paid | shipped | delivered | cancelled | refunded
+  variables: { orderId, items, subtotal, shipping, total, tracking, delivery, date },
+});
+```
+
+Server / webhooks use `sendEmailServer` (service-role bearer).
+
+**Preview the template locally:** `/api/email/preview?type=shipped` (also `receipt`, `paid`, etc.).
+
+Without Resend / the function, sends no-op or fall back safely so checkout and admin still work.
 
 ---
 

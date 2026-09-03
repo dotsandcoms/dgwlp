@@ -325,29 +325,13 @@ export async function updateOrderStatus(id, status) {
 }
 
 /**
- * Fire a transactional email for a status change.
- * Safe to call before Resend templates exist — /api/email no-ops without a key.
+ * Fire a transactional email for a status change via the send-email edge function.
  */
 export async function notifyOrderStatusEmail(order, status) {
   if (!order?.email) return { skipped: true };
   try {
-    const res = await fetch("/api/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: status,
-        order: {
-          id: order.order_no || order.id,
-          email: order.email,
-          items: order.lines || order.items || [],
-          total: order.total,
-          tracking: order.tracking || null,
-          status,
-          delivery: order.delivery || null,
-        },
-      }),
-    });
-    return await res.json().catch(() => ({}));
+    const { sendOrderStatusEmailClient } = await import("@/lib/emails");
+    return await sendOrderStatusEmailClient(order, status);
   } catch {
     return { skipped: true };
   }

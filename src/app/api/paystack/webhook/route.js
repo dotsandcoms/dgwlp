@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
+import { sendOrderStatusEmailByOrderNo } from "@/lib/order-email";
 
 // Paystack webhook. Verify the x-paystack-signature HMAC, then mark paid.
 // https://paystack.com/docs/payments/webhooks/
@@ -22,9 +23,29 @@ export async function POST(req) {
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       if (url && serviceKey && orderNo) {
         const sb = createClient(url, serviceKey, { auth: { persistSession: false } });
-        await sb.from("orders")
-          .update({ status: "paid", payment_provider: "paystack", payment_ref: event.data.reference, paid_at: new Date().toISOString() })
-          .eq("order_no", orderNo);
+        const { data: existing } = await sb
+          .from("orders")
+          .select("id,status")
+          .eq("order_no", orderNo)
+          .maybeSingle();
+
+        if (existing) {
+          const alreadyPaid = existing.status === "paid";
+          await sb
+            .from("orders")
+            .update({
+              status: "paid",
+              payment_provider: "paystack",
+              payment_ref: event.data.reference,
+              paid_at: new Date().toISOString(),
+            })
+            .eq("order_no", orderNo);
+
+          // Notify once when status first becomes paid (no-ops without RESEND_API_KEY).
+          if (!alreadyPaid) {
+            await sendOrderStatusEmailByOrderNo(sb, orderNo, "paid").catch(() => {});
+          }
+        }
       }
     }
     return NextResponse.json({ received: true });

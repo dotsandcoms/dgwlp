@@ -134,11 +134,8 @@ export function CheckoutFlow() {
       };
       try { localStorage.setItem("dg_last_order", JSON.stringify(order)); } catch {}
       try {
-        await fetch("/api/email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "receipt", order }),
-        });
+        const { sendOrderStatusEmailClient } = await import("@/lib/emails");
+        await sendOrderStatusEmailClient(order, "receipt");
       } catch {}
       cart.clear();
       toast(result.localOnly ? "Order placed (demo mode)" : "Order placed — thank you!");

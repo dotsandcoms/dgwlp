@@ -80,3 +80,7 @@ just the filename (e.g. `lion.jpg`) — the app builds the public URL automatica
    If Site URL stays on localhost, confirmation emails always open localhost even when you signed up on production.
 5. Set PayFast/Paystack notify URLs to `https://your-domain/api/payfast/notify`
    and `/api/paystack/webhook`.
+6. **Resend + `send-email` edge function** — deploy `supabase/functions/send-email`, then set
+   function secrets `RESEND_API_KEY` and `EMAIL_FROM` (verified domain). The app calls it via
+   `src/lib/emails.js` (`supabase.functions.invoke('send-email', …)`). Customers get emails on
+   checkout receipt, payment webhooks (`paid`), and every admin status change.

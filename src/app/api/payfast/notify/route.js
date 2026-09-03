@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getServerSettings } from "@/lib/settings-server";
+import { sendOrderStatusEmailByOrderNo } from "@/lib/order-email";
 
 // PayFast ITN (Instant Transaction Notification).
 // PayFast POSTs here after payment. Verify, then mark the order paid using
@@ -26,9 +27,29 @@ export async function POST(req) {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (url && serviceKey && status === "COMPLETE" && orderNo) {
       const sb = createClient(url, serviceKey, { auth: { persistSession: false } });
-      await sb.from("orders")
-        .update({ status: "paid", payment_provider: "payfast", payment_ref: paymentRef, paid_at: new Date().toISOString() })
-        .eq("order_no", orderNo);
+      const { data: existing } = await sb
+        .from("orders")
+        .select("id,status")
+        .eq("order_no", orderNo)
+        .maybeSingle();
+
+      if (existing) {
+        const alreadyPaid = existing.status === "paid";
+        await sb
+          .from("orders")
+          .update({
+            status: "paid",
+            payment_provider: "payfast",
+            payment_ref: paymentRef,
+            paid_at: new Date().toISOString(),
+          })
+          .eq("order_no", orderNo);
+
+        // Notify once when status first becomes paid (no-ops without RESEND_API_KEY).
+        if (!alreadyPaid) {
+          await sendOrderStatusEmailByOrderNo(sb, orderNo, "paid").catch(() => {});
+        }
+      }
     }
     return new NextResponse("OK", { status: 200 });
   } catch (e) {

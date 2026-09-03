@@ -137,7 +137,21 @@ export function CheckoutFlow() {
         await fetch("/api/email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "receipt", order }),
+          body: JSON.stringify({
+            type: "receipt",
+            order: {
+              id: order.id,
+              email: order.email,
+              items: order.items || order.lines || [],
+              subtotal: order.subtotal,
+              shipping: order.shipping,
+              total: order.total,
+              tax: order.tax,
+              taxLabel: order.taxLabel,
+              delivery: order.delivery || null,
+              date: order.date || null,
+            },
+          }),
         });
       } catch {}
       cart.clear();

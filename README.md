@@ -71,7 +71,10 @@ Use sandbox credentials while testing.
 
 Order emails go out on checkout (receipt), payment confirmation (`paid` from Paystack/PayFast
 webhooks), and every admin status change (pending → paid → shipped → delivered, plus
-cancelled / refunded). Shared sender: `src/lib/order-email.js`.
+cancelled / refunded). Shared sender: `src/lib/order-email.js` (branded HTML matching the site).
+
+**Preview the template locally:** open `/api/email/preview?type=shipped` (also `receipt`, `paid`,
+`delivered`, `cancelled`, `refunded`).
 
 1. Create an API key at [resend.com](https://resend.com) → API Keys.
 2. Verify your sending domain (e.g. `dgwlp.co.za`) and use a from-address on that domain.

@@ -437,7 +437,8 @@ const ORDER_EMAIL_SELECT = `
 `;
 
 /**
- * Load an order by order_no and send a status email.
+ * Load an order by order_no and send a status email via the send-email edge function
+ * (falls back to direct Resend if the function is unavailable).
  * @param {import("@supabase/supabase-js").SupabaseClient} sb
  * @param {string} orderNo
  * @param {string} type  receipt|pending|paid|shipped|…
@@ -454,7 +455,9 @@ export async function sendOrderStatusEmailByOrderNo(sb, orderNo, type) {
 }
 
 /**
- * Send a transactional order email via Resend.
+ * Send a transactional order email.
+ * Prefers the Supabase `send-email` edge function (service role); falls back to
+ * direct Resend when SUPABASE_SERVICE_ROLE_KEY / function is unavailable.
  * @param {{ type?: string, order: object }} opts
  * @returns {Promise<{ ok?: boolean, skipped?: boolean, error?: string }>}
  */
@@ -468,11 +471,29 @@ export async function sendOrderStatusEmail({ type, order }) {
     return { skipped: true };
   }
 
+  const resolved = resolveEmailType(type);
+
+  // Preferred path: Supabase edge function
+  try {
+    const { sendOrderStatusEmailServer } = await import("@/lib/emails");
+    const viaFn = await sendOrderStatusEmailServer(order, resolved);
+    if (viaFn?.ok) return viaFn;
+    if (viaFn?.error && !viaFn?.skipped) {
+      // Fall through to direct Resend if the function isn't deployed yet
+      console.warn("send-email edge function failed, falling back:", viaFn.error);
+    } else if (viaFn?.skipped) {
+      // no supabase service key — try direct Resend
+    } else {
+      return viaFn;
+    }
+  } catch (e) {
+    console.warn("send-email invoke error, falling back:", e?.message || e);
+  }
+
   const key = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM || "Doron Goldstein Photography <onboarding@resend.dev>";
   if (!key) return { skipped: true };
 
-  const resolved = resolveEmailType(type);
   const orderId = scrubText(String(order.id || ""), 40) || "order";
   const subject = STATUS_COPY[resolved].subject(orderId);
   const html = buildOrderEmailHtml({ type: resolved, order });

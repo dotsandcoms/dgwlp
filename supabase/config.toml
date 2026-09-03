@@ -1,0 +1,9 @@
+# A string used to distinguish different Supabase projects on the same host
+project_id = "flbskxcwywqiqrhofrqx"
+
+[api]
+enabled = true
+
+[functions.send-email]
+# Auth is enforced inside the function (service role OR logged-in user).
+verify_jwt = false

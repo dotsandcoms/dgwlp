@@ -67,23 +67,38 @@ Use sandbox credentials while testing.
 
 ---
 
-## 4. Email (Resend)
+## 4. Email (Resend + Supabase `send-email` edge function)
 
 Order emails go out on checkout (receipt), payment confirmation (`paid` from Paystack/PayFast
-webhooks), and every admin status change (pending → paid → shipped → delivered, plus
-cancelled / refunded). Shared sender: `src/lib/order-email.js` (branded HTML matching the site).
+webhooks), and every admin status change. Delivery is handled by the Supabase edge function
+**`send-email`** (same pattern as other Dots projects).
 
-**Preview the template locally:** open `/api/email/preview?type=shipped` (also `receipt`, `paid`,
-`delivered`, `cancelled`, `refunded`).
+### Deploy the function
 
-1. Create an API key at [resend.com](https://resend.com) → API Keys.
-2. Verify your sending domain (e.g. `dgwlp.co.za`) and use a from-address on that domain.
-3. Set in `.env.local` and Vercel:
-   - `RESEND_API_KEY=re_…`
-   - `EMAIL_FROM="Doron Goldstein Photography <orders@dgwlp.co.za>"`
-   - Optional: `CONTACT_TO=` for the contact-form inbox (defaults to the address in `EMAIL_FROM`)
+```bash
+supabase functions deploy send-email --project-ref flbskxcwywqiqrhofrqx
+supabase secrets set RESEND_API_KEY=re_… EMAIL_FROM="Doron Goldstein Photography <orders@dgwlp.co.za>" SITE_URL=https://your-domain
+```
 
-Without `RESEND_API_KEY`, sends no-op safely so checkout and admin still work.
+Secrets needed on the function: `RESEND_API_KEY`, `EMAIL_FROM` (verified domain), optional `SITE_URL`.
+
+### Invoke from the app
+
+```js
+import { sendEmail } from "@/lib/emails";
+
+await sendEmail({
+  to: customerEmail,
+  template: "shipped", // receipt | pending | paid | shipped | delivered | cancelled | refunded
+  variables: { orderId, items, subtotal, shipping, total, tracking, delivery, date },
+});
+```
+
+Server / webhooks use `sendEmailServer` (service-role bearer).
+
+**Preview the template locally:** `/api/email/preview?type=shipped` (also `receipt`, `paid`, etc.).
+
+Without Resend / the function, sends no-op or fall back safely so checkout and admin still work.
 
 ---
 

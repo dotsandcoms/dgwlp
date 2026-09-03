@@ -77,10 +77,11 @@ webhooks), and every admin status change. Delivery is handled by the Supabase ed
 
 ```bash
 supabase functions deploy send-email --project-ref flbskxcwywqiqrhofrqx
-supabase secrets set RESEND_API_KEY=re_… EMAIL_FROM="Doron Goldstein Photography <orders@dgwlp.co.za>" SITE_URL=https://your-domain
+supabase secrets set RESEND_API_KEY=re_… EMAIL_FROM="Doron Goldstein Photography <orders@dgwlp.co.za>" ORDERS_BCC=orders@dgwlp.co.za SITE_URL=https://your-domain
 ```
 
-Secrets needed on the function: `RESEND_API_KEY`, `EMAIL_FROM` (verified domain), optional `SITE_URL`.
+Secrets needed on the function: `RESEND_API_KEY`, `EMAIL_FROM` (verified domain), optional `SITE_URL`,
+optional `ORDERS_BCC` (defaults to `orders@dgwlp.co.za` — BCC'd on every order email).
 
 ### Invoke from the app
 

@@ -35,10 +35,12 @@ App helpers: `src/lib/emails.js` → `sendEmail` / `sendEmailServer`.
 supabase secrets set \
   RESEND_API_KEY=re_… \
   EMAIL_FROM="Doron Goldstein Photography <orders@dgwlp.co.za>" \
+  ORDERS_BCC=orders@dgwlp.co.za \
   SITE_URL=https://your-domain
 ```
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically.
+Order emails are BCC'd to `ORDERS_BCC` (default `orders@dgwlp.co.za`) so the shop inbox always gets a copy.
 
 ## Deploy
 

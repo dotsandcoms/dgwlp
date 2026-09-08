@@ -269,7 +269,7 @@ export function ShopClient({ products, categories }) {
   const heading = cat === "All" ? "The Collection" : cat;
   const sub =
     cat === "All"
-      ? "Fine-art wildlife prints from the Kruger, Kgalagadi and Timbivati — choose your size, finish and frame."
+      ? "Wildlife prints from the Kruger, Kgalagadi and Timbivati — choose your size, finish and frame."
       : `Browse ${cat.toLowerCase()} prints — each available in multiple sizes and finishes.`;
 
   return (
@@ -386,7 +386,7 @@ export function ShopClient({ products, categories }) {
                     >
                       <Heart size={16} color={wish.includes(p.id) ? "#c0392b" : C.gray} fill={wish.includes(p.id) ? "#c0392b" : "none"} />
                     </button>
-                    <Card p={p} tileAspect="4 / 5" />
+                    <Card p={p} tileAspect="4 / 5" showShopActions />
                   </div>
                 </Reveal>
               ))}

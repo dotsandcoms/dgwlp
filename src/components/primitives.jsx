@@ -168,6 +168,74 @@ export function Dropdown({ label, value, options, onChange }) {
   );
 }
 
+/** Button group for product options (size, finish, frame colour). */
+export function OptionButtons({ label, value, options, onChange }) {
+  if (!options?.length) return null;
+  return (
+    <div className="mb-7">
+      <div
+        className="text-[11px] tracking-[.18em] uppercase mb-3"
+        style={{ fontFamily: HEAD, color: C.gray }}
+      >
+        {label}
+      </div>
+      <div className="flex flex-wrap gap-2.5">
+        {options.map((o) => {
+          const active = o.value === value;
+          const hasSwatch = Boolean(o.swatch || o.color);
+          return (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onChange(o.value)}
+              aria-pressed={active}
+              className="inline-flex items-center gap-2.5 text-[13px] sm:text-[14px] px-4 py-2.5 transition-all duration-200"
+              style={{
+                fontFamily: HEAD,
+                letterSpacing: ".03em",
+                borderRadius: 8,
+                background: active ? C.green : "#fff",
+                color: active ? "#fff" : C.ink,
+                border: `1px solid ${active ? C.green : C.line}`,
+                boxShadow: active ? "0 6px 18px rgba(85,107,47,.22)" : "none",
+              }}
+              onMouseEnter={(e) => {
+                if (active) return;
+                e.currentTarget.style.borderColor = C.green;
+                e.currentTarget.style.background = C.greenSoft;
+              }}
+              onMouseLeave={(e) => {
+                if (active) return;
+                e.currentTarget.style.borderColor = C.line;
+                e.currentTarget.style.background = "#fff";
+              }}
+            >
+              {hasSwatch && (
+                <span
+                  aria-hidden
+                  className="shrink-0 overflow-hidden"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 4,
+                    border: active ? "1px solid rgba(255,255,255,.45)" : `1px solid ${C.line}`,
+                    background: o.color || "#ddd",
+                    backgroundImage: o.swatch ? `url(${o.swatch})` : undefined,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    boxShadow: o.color === "#fdfdfd" ? "inset 0 0 0 1px rgba(0,0,0,.08)" : undefined,
+                  }}
+                />
+              )}
+              <span>{o.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function Pill({ children, onClick, variant = "solid", size = "md", style, type, disabled }) {
   const base = { fontFamily: HEAD, letterSpacing: ".06em", cursor: disabled ? "default" : "pointer", borderRadius: 999, transition: "all .2s", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 };
   const pad = size === "sm" ? "8px 18px" : "13px 30px";

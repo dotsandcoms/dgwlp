@@ -6,7 +6,7 @@ import { X, Minus, Plus, Truck, Heart, ArrowLeft } from "lucide-react";
 import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, sizeLabel, priceOfVariant, availableSizesOf, availableMaterialsFor, colourFromCategory } from "@/lib/pricing";
 import { freeShippingLabel, DEFAULT_SETTINGS, internationalShippingNote } from "@/lib/settings";
 import { useDisplayCurrency } from "@/lib/use-public-settings";
-import { Plate, Dropdown, Pill } from "./primitives";
+import { Plate, OptionButtons, Pill } from "./primitives";
 import { useCart, useToast } from "@/context/providers";
 
 const COLOUR_LABEL = { bw: "Black & White", colour: "Colour" };
@@ -23,7 +23,8 @@ function printTypeOf(matId) {
 
 /** Finish label without the Paper/Canvas prefix. */
 function finishLabel(mat) {
-  return mat.label.replace(/^(Paper|Canvas)\s*[—–-]\s*/, "");
+  const raw = mat.label.replace(/^(Paper|Canvas)\s*[—–-]\s*/, "");
+  return raw.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function ProductDetail({ product }) {
@@ -43,7 +44,6 @@ export function ProductDetail({ product }) {
   const [qty, setQty] = useState(1);
   const [wish, setWish] = useState(false);
   const [zoom, setZoom] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(1);
   const [shipNote, setShipNote] = useState("Free shipping on orders over R2 500");
   const [intlNote, setIntlNote] = useState("");
 
@@ -74,6 +74,9 @@ export function ProductDetail({ product }) {
     return () => { cancelled = true; };
   }, []);
 
+  const ratioMeta = RATIOS[product.ratio] || RATIOS.landscape;
+  const [arW, arH] = String(ratioMeta.ar).split("/").map((s) => Number(s.trim()) || 1);
+  const isPortrait = product.ratio === "portrait" || arH > arW;
   const mat = MATERIALS.find((m) => m.id === material) || MATERIALS[0];
   const unit = priceOfVariant(product, size, material);
   const colourLabel = COLOUR_LABEL[printColour] || COLOUR_LABEL.bw;
@@ -96,19 +99,13 @@ export function ProductDetail({ product }) {
   };
 
   const openZoom = () => {
-    setZoomLevel(1);
     setZoom(true);
     document.body.style.overflow = "hidden";
   };
 
   const closeZoom = () => {
     setZoom(false);
-    setZoomLevel(1);
     document.body.style.overflow = "";
-  };
-
-  const toggleZoom = () => {
-    setZoomLevel((z) => (z >= 2 ? 1 : 2.5));
   };
 
   useEffect(() => {
@@ -179,13 +176,18 @@ export function ProductDetail({ product }) {
             type="button"
             onClick={openZoom}
             title="View full size"
-            className="block w-full overflow-hidden text-left"
-            style={{ borderRadius: 4, border: `1px solid ${C.line}`, cursor: "zoom-in" }}
+            className="block overflow-hidden text-left mx-auto"
+            style={{
+              borderRadius: 4,
+              border: `1px solid ${C.line}`,
+              cursor: "zoom-in",
+              width: isPortrait ? "80%" : "100%",
+            }}
           >
             <Plate
               product={product}
               printColour={printColour}
-              style={{ width: "100%", aspectRatio: RATIOS[product.ratio].ar }}
+              style={{ width: "100%", aspectRatio: ratioMeta.ar }}
             />
           </button>
         </div>
@@ -200,9 +202,9 @@ export function ProductDetail({ product }) {
           <div className="text-[12px] text-neutral-500 mb-5">Ratio · {RATIOS[product.ratio].label}</div>
           <p className="text-[15px] leading-relaxed text-neutral-700 mb-8">{product.desc}</p>
 
-          <Dropdown label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: sizeLabel(s) }))} />
+          <OptionButtons label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: sizeLabel(s) }))} />
           {availableTypes.length > 1 ? (
-            <Dropdown
+            <OptionButtons
               label="Print"
               value={printType}
               onChange={(v) => {
@@ -213,12 +215,14 @@ export function ProductDetail({ product }) {
               options={availableTypes.map((t) => ({ value: t.id, label: t.label }))}
             />
           ) : availableTypes.length === 1 ? (
-            <div className="mb-5">
-              <div style={{ fontFamily: HEAD, letterSpacing: ".05em" }} className="text-[15px] mb-2 text-neutral-700">Print</div>
-              <div className="text-[15px] py-2" style={{ borderBottom: `1px solid ${C.ink}` }}>{availableTypes[0].label}</div>
-            </div>
+            <OptionButtons
+              label="Print"
+              value={availableTypes[0].id}
+              onChange={() => {}}
+              options={[{ value: availableTypes[0].id, label: availableTypes[0].label }]}
+            />
           ) : null}
-          <Dropdown
+          <OptionButtons
             label="Finish"
             value={material}
             onChange={setMaterial}
@@ -227,7 +231,19 @@ export function ProductDetail({ product }) {
               label: finishLabel(m),
             }))}
           />
-          {mat.framed && <Dropdown label="Frame colour" value={frameCol} onChange={setFrameCol} options={FRAME_COLOURS.map((f) => ({ value: f.id, label: f.label }))} />}
+          {mat.framed && (
+            <OptionButtons
+              label="Frame colour"
+              value={frameCol}
+              onChange={setFrameCol}
+              options={FRAME_COLOURS.map((f) => ({
+                value: f.id,
+                label: f.label,
+                color: f.c,
+                swatch: f.swatch || null,
+              }))}
+            />
+          )}
 
           <div className="flex items-center gap-4 mt-2">
             <div className="flex items-center" style={{ border: `1px solid ${C.line}`, borderRadius: 999 }}>
@@ -249,51 +265,34 @@ export function ProductDetail({ product }) {
 
       {zoom && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6"
-          style={{ background: "rgba(15,15,13,.94)" }}
+          className="fixed inset-0 z-[60] flex flex-col items-center justify-center"
+          style={{ background: "rgba(15,15,13,.94)", padding: "max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom))" }}
           role="dialog"
           aria-modal="true"
           onClick={closeZoom}
         >
-          <button type="button" className="absolute top-5 right-5 text-white z-10" onClick={closeZoom} aria-label="Close">
-            <X size={30} />
+          <button type="button" className="absolute top-4 right-4 sm:top-5 sm:right-5 text-white z-10" onClick={closeZoom} aria-label="Close">
+            <X size={28} />
           </button>
           <div
-            className="w-full max-w-[min(96vw,960px)] overflow-auto"
-            style={{ maxHeight: "90vh" }}
+            className="flex flex-col items-center justify-center min-h-0 w-full"
+            style={{ maxHeight: "100%" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={toggleZoom}
-              className="block w-full"
-              style={{ cursor: zoomLevel >= 2 ? "zoom-out" : "zoom-in" }}
-              title={zoomLevel >= 2 ? "Zoom out" : "Zoom in"}
-              aria-label={zoomLevel >= 2 ? "Zoom out" : "Zoom in"}
-            >
-              <div
-                style={{
-                  width: zoomLevel >= 2 ? "250%" : "100%",
-                  margin: "0 auto",
-                  transition: "width .3s ease",
-                }}
-              >
-                <Plate
-                  product={product}
-                  printColour={printColour}
-                  fit="contain"
-                  style={{
-                    width: "100%",
-                    aspectRatio: RATIOS[product.ratio].ar,
-                    borderRadius: 4,
-                    backgroundColor: "#1a1a18",
-                  }}
-                />
-              </div>
-            </button>
-            <p className="text-center text-white/70 text-[13px] mt-4 px-2" style={{ fontFamily: HEAD, letterSpacing: ".1em" }}>
+            <Plate
+              product={product}
+              printColour={printColour}
+              fit="contain"
+              style={{
+                width: `min(92vw, 900px, calc((100dvh - 88px) * ${arW} / ${arH}))`,
+                maxHeight: "calc(100dvh - 88px)",
+                aspectRatio: ratioMeta.ar,
+                borderRadius: 4,
+                backgroundColor: "#1a1a18",
+              }}
+            />
+            <p className="text-center text-white/70 text-[13px] mt-3 px-2 shrink-0" style={{ fontFamily: HEAD, letterSpacing: ".1em" }}>
               {product.name.toUpperCase()} · {colourLabel.toUpperCase()}
-              {zoomLevel < 2 ? " · Click image to zoom in" : " · Click image to zoom out"}
             </p>
           </div>
         </div>

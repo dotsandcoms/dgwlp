@@ -2,11 +2,23 @@
 
 export const ANIMAL_SUGGESTIONS = [
   "lion", "lioness", "leopard", "cheetah", "elephant", "rhino", "zebra",
-  "wildebeest", "buffalo", "giraffe", "hippo", "hyena", "wild dog",
+  "wildebeest", "buffalo", "giraffe", "hippo", "hyena", "wild dog", "painted dog",
+  "warthog", "kudu", "impala", "antelope",
   "bird", "eagle", "owl", "landscape",
 ];
 
-const ANIMAL_VOCAB = ANIMAL_SUGGESTIONS;
+/** Longer phrases first so “wild dog” / “painted dog” match as one term. */
+const ANIMAL_VOCAB = [...ANIMAL_SUGGESTIONS].sort((a, b) => b.length - a.length);
+
+/** Extra search aliases → canonical tags (so “painted dog” finds wild-dog prints). */
+const SEARCH_ALIASES = {
+  "painted dog": ["wild dog", "painted dog"],
+  "african wild dog": ["wild dog"],
+  gnu: ["wildebeest"],
+  rhinoceros: ["rhino"],
+  "cape buffalo": ["buffalo"],
+  "african buffalo": ["buffalo"],
+};
 
 const BW_PHRASES = ["black and white", "black & white", "b&w", "monochrome"];
 const COLOUR_PHRASES = ["colour", "color"];
@@ -48,6 +60,7 @@ export function inferAnimalTags(product) {
   const found = ANIMAL_VOCAB.filter((a) => hay.includes(a));
   if (found.length) return found;
 
+  if (hay.includes("painted")) return ["wild dog"];
   if (hay.includes("big cat") || hay.includes("cats")) return ["lion"];
   if (hay.includes("plains")) return ["wildebeest"];
   return [];
@@ -112,7 +125,17 @@ export function parseSearchQuery(raw) {
 }
 
 export function matchProductQuery(product, query) {
-  const { terms, colourFilter } = parseSearchQuery(query);
+  let raw = String(query || "").trim().toLowerCase();
+  if (!raw) return true;
+
+  // Expand multi-word animal aliases before splitting into terms
+  for (const [alias, tags] of Object.entries(SEARCH_ALIASES)) {
+    if (raw.includes(alias)) {
+      raw = `${raw} ${tags.join(" ")}`;
+    }
+  }
+
+  const { terms, colourFilter } = parseSearchQuery(raw);
   if (!terms.length && !colourFilter) return true;
 
   if (colourFilter) {
@@ -124,5 +147,6 @@ export function matchProductQuery(product, query) {
   if (!terms.length) return true;
 
   const hay = productSearchHay(product);
+  // Prefer phrase match for multi-word animals still present as joined terms
   return terms.every((w) => hay.includes(w));
 }

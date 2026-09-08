@@ -2,16 +2,21 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
-import { C, HEAD, RATIOS } from "@/lib/pricing";
+import { C, HEAD, RATIOS, rangeOf } from "@/lib/pricing";
 import { siteImage } from "@/lib/supabase";
 import { mergeSiteContent, getHowSteps } from "@/lib/site-content";
+import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { Plate, Parallax, Reveal, Pill } from "./primitives";
 
-export function Card({ p, tileAspect }) {
+export function Card({ p, tileAspect, showShopActions = false }) {
   const cardAr = tileAspect || RATIOS[p.ratio]?.ar || "3 / 2";
+  const { money } = useDisplayCurrency();
+  const [min] = rangeOf(p);
+  const href = `/product/${p.slug}`;
+
   return (
     <div className="group text-center">
-      <Link href={`/product/${p.slug}`} className="block w-full overflow-hidden" style={{ borderRadius: 4 }}>
+      <Link href={href} className="block w-full overflow-hidden" style={{ borderRadius: 4 }}>
         <Plate
           product={p}
           fit="contain"
@@ -19,7 +24,41 @@ export function Card({ p, tileAspect }) {
           className="group-hover:scale-[1.05]"
         />
       </Link>
-      <Link href={`/product/${p.slug}`} className="block mt-4 text-[16px] hover:opacity-70" style={{ fontFamily: HEAD }}>{p.name}</Link>
+      <Link href={href} className="block mt-4 text-[16px] hover:opacity-70" style={{ fontFamily: HEAD }}>{p.name}</Link>
+      {showShopActions && (
+        <>
+          {min > 0 && (
+            <p className="mt-1.5 text-[14px] text-neutral-600" style={{ fontFamily: HEAD }}>
+              From {money(min)}
+            </p>
+          )}
+          <div className="mt-3">
+            <Link
+              href={href}
+              className="inline-flex items-center justify-center text-[13px] px-[18px] py-2 rounded-full transition-colors duration-200"
+              style={{
+                fontFamily: HEAD,
+                letterSpacing: ".06em",
+                border: `1px solid ${C.ink}`,
+                color: C.ink,
+                background: "transparent",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = C.green;
+                e.currentTarget.style.borderColor = C.green;
+                e.currentTarget.style.color = "#fff";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.borderColor = C.ink;
+                e.currentTarget.style.color = C.ink;
+              }}
+            >
+              Select
+            </Link>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -290,7 +290,7 @@ export function Header() {
       <header className="sticky top-0 z-50" style={{ background: "rgba(255,255,255,.92)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${C.line}` }}>
         <div className="w-full px-4 sm:px-8 h-[68px] flex items-center justify-between gap-3 min-w-0">
           <Link href="/" style={{ fontFamily: HEAD, fontWeight: 500 }} className="text-[13px] sm:text-[20px] tracking-[.08em] sm:tracking-[.12em] min-w-0 leading-tight">
-            <span style={{ color: C.ink }}>DORON GOLDSTEIN </span><span className="whitespace-nowrap" style={{ color: C.green }}>PHOTOGRAPHY</span>
+            <span style={{ color: C.ink }}>DORON GOLDSTEIN </span><span className="whitespace-nowrap" style={{ color: C.green }}>WILDLIFE PHOTOGRAPHY</span>
           </Link>
           <nav className="hidden md:flex items-center gap-8" style={{ fontFamily: HEAD, letterSpacing: ".08em" }}>
             {LINKS.map(([l, href]) => <Link key={href} href={href} className="text-[14px] hover:opacity-60" style={{ color: active(href) ? C.green : C.ink }}>{l}</Link>)}
@@ -423,7 +423,7 @@ export function Footer() {
     <footer style={{ background: C.dark, color: "#cfcfcb" }}>
       <div className="max-w-[1240px] mx-auto px-5 py-14 grid gap-10 md:grid-cols-4">
         <div className="md:col-span-2">
-          <div style={{ fontFamily: HEAD }} className="tracking-[.12em] text-white text-[16px] mb-3">DORON GOLDSTEIN <span style={{ color: C.green }}>PHOTOGRAPHY</span></div>
+          <div style={{ fontFamily: HEAD }} className="tracking-[.12em] text-white text-[16px] mb-3">DORON GOLDSTEIN <span style={{ color: C.green }}>WILDLIFE PHOTOGRAPHY</span></div>
           <p className="text-[13px] leading-relaxed opacity-80 max-w-sm">For the love of wildlife. Shipped across South Africa; international delivery quoted on request.</p>
         </div>
         <div className="text-[13px]">

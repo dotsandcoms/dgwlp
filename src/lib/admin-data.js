@@ -5,6 +5,7 @@
 import { browserClient } from "./supabase";
 import { DEFAULT_SETTINGS, mergeSettings } from "./settings";
 import { colourFromCategory } from "./pricing";
+import { applyStoreOrder } from "./store-order";
 import { enrichOrdersWithImages } from "./orders";
 
 export const slugify = (s) =>
@@ -66,23 +67,35 @@ export async function deleteCategory(id) {
 }
 
 /* ------------------------------- products ----------------------------- */
+const STORE_ORDER_KEY = "store_order";
+
+export async function fetchStoreOrder() {
+  const sb = browserClient();
+  if (!sb) return [];
+  const { data, error } = await sb.from("site_settings").select("value").eq("key", STORE_ORDER_KEY).maybeSingle();
+  if (error) return [];
+  return Array.isArray(data?.value?.productIds) ? data.value.productIds.filter(Boolean) : [];
+}
+
 export async function fetchProducts() {
   const sb = browserClient();
-  const [{ data: products, error: pErr }, { data: ranges, error: rErr }] = await Promise.all([
+  const [{ data: products, error: pErr }, { data: ranges, error: rErr }, orderIds] = await Promise.all([
     sb.from("products")
       .select("id,name,slug,sku,category_id,ratio_id,colour,description,hero_image,is_published,created_at,categories(name)")
       .order("created_at", { ascending: false }),
     sb.from("product_price_range").select("product_id,min_cents,max_cents"),
+    fetchStoreOrder(),
   ]);
   if (pErr) throw pErr;
   if (rErr) throw rErr;
   const rangeMap = new Map((ranges || []).map((r) => [r.product_id, r]));
-  return (products || []).map((p) => ({
+  const mapped = (products || []).map((p) => ({
     ...p,
     category_name: p.categories?.name || "Uncategorised",
     min_cents: rangeMap.get(p.id)?.min_cents ?? 0,
     max_cents: rangeMap.get(p.id)?.max_cents ?? 0,
   }));
+  return applyStoreOrder(mapped, orderIds);
 }
 
 export async function fetchProductForEdit(id) {
@@ -135,6 +148,19 @@ export async function saveProduct({ id, fields, variants, roomIds }) {
     if (error) throw error;
   }
   return productId;
+}
+
+/** Persist shop order. ids[0] is the first print shoppers see. */
+export async function saveProductOrder(ids) {
+  const list = (Array.isArray(ids) ? ids : []).filter(Boolean).map(String);
+  const sb = browserClient();
+  if (!sb) throw new Error("Not signed in");
+  const { error } = await sb.from("site_settings").upsert(
+    { key: STORE_ORDER_KEY, value: { productIds: list }, updated_at: new Date().toISOString() },
+    { onConflict: "key" },
+  );
+  if (error) throw error;
+  return list;
 }
 
 export async function deleteProduct(id) {

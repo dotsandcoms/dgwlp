@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings, Star, X, Users, FileText } from "lucide-react";
+import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings, Star, X, Users, FileText, GripVertical } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, CATEGORY_NAMES, rangeOf, colourFromCategory } from "@/lib/pricing";
 import { animalTagsFromInput, animalTagsToInput, ANIMAL_SUGGESTIONS, formatAnimalTag, inferAnimalTags } from "@/lib/product-tags";
@@ -164,6 +164,10 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
   const [selected, setSelected] = useState(() => new Set());
   const [bulkCategoryId, setBulkCategoryId] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [ordering, setOrdering] = useState(false);
+  const [orderItems, setOrderItems] = useState([]);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const dragIndex = useRef(null);
 
   const categoryNames = categories.map((c) => c.name);
 
@@ -244,6 +248,39 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
     try { await db.deleteProduct(p.id); toast("Print deleted"); onDeleted(); } catch (e) { toast(friendlyError(e, "Delete failed")); } finally { setBusyId(null); }
   };
 
+  const startOrder = () => {
+    if (query.trim() || cat !== "All") {
+      toast("Clear the search and category filter to reorder the store");
+      return;
+    }
+    setOrderItems(products);
+    setOrdering(true);
+  };
+
+  const moveOrder = (from, to) => {
+    setOrderItems((prev) => {
+      if (from === to || from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev;
+      const next = [...prev];
+      const [row] = next.splice(from, 1);
+      next.splice(to, 0, row);
+      return next;
+    });
+  };
+
+  const saveOrder = async () => {
+    setSavingOrder(true);
+    try {
+      await db.saveProductOrder(orderItems.map((p) => p.id));
+      toast("Store order saved");
+      setOrdering(false);
+      onDeleted();
+    } catch (e) {
+      toast(friendlyError(e, "Could not save order"));
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
   const moveSelected = async () => {
     if (!selectedCount) return toast("Select at least one print");
     if (!bulkCategoryId) return toast("Choose a category");
@@ -271,10 +308,71 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
           {pageCount > 1 ? ` · page ${safePage}/${pageCount}` : ""}
           {selectedCount > 0 ? ` · ${selectedCount} selected` : ""}
         </span>
-        <Pill size="sm" onClick={() => onEdit(null)}><Plus size={14} /> New print</Pill>
+        <div className="flex gap-2">
+          {!ordering && (
+            <Pill size="sm" variant="outline" onClick={startOrder}><GripVertical size={14} /> Reorder store</Pill>
+          )}
+          <Pill size="sm" onClick={() => onEdit(null)}><Plus size={14} /> New print</Pill>
+        </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-3 mb-5">
+      {ordering && (
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <p className="text-[13px] text-neutral-500 max-w-xl">
+              Drag prints into the order shoppers see. The first print appears first in the shop.
+            </p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setOrdering(false)} className="text-[13px] px-4 py-2 rounded-full" style={{ border: `1px solid ${C.line}`, fontFamily: HEAD }}>Cancel</button>
+              <Pill size="sm" onClick={saveOrder} disabled={savingOrder}>
+                {savingOrder ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save order"}
+              </Pill>
+            </div>
+          </div>
+          <ul className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
+            {orderItems.map((p, i) => (
+              <li
+                key={p.id}
+                draggable
+                onDragStart={() => { dragIndex.current = i; }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  const from = dragIndex.current;
+                  if (from == null || from === i) return;
+                  moveOrder(from, i);
+                  dragIndex.current = i;
+                }}
+                onDragEnd={() => { dragIndex.current = null; }}
+                className="flex items-center gap-3 px-3 py-2.5 bg-white"
+                style={{ borderTop: i ? `1px solid ${C.line}` : undefined, cursor: "grab" }}
+              >
+                <GripVertical size={16} className="text-neutral-300 shrink-0" />
+                <span className="w-7 text-[12px] text-neutral-400 tabular-nums" style={{ fontFamily: HEAD }}>{i + 1}</span>
+                <Plate
+                  product={{ image: imageUrl(p.hero_image), colour: "colour", name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }}
+                  printColour="colour"
+                  showSig={false}
+                  style={{ width: 40, height: 40, borderRadius: 3, flexShrink: 0 }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[14px]" style={{ fontFamily: HEAD }}>{p.name}</div>
+                  <div className="text-[12px] text-neutral-500">{p.category_name}</div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+                  <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => moveOrder(i, i - 1)} className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-30" style={{ border: `1px solid ${C.line}` }}>
+                    <ChevronUp size={15} />
+                  </button>
+                  <button type="button" aria-label="Move down" disabled={i === orderItems.length - 1} onClick={() => moveOrder(i, i + 1)} className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-30" style={{ border: `1px solid ${C.line}` }}>
+                    <ChevronDown size={15} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {!ordering && <div className="flex flex-col lg:flex-row gap-3 mb-5">
         <div className="flex-1 flex items-center gap-2 px-3" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>
           <Search size={15} color={C.gray} />
           <input
@@ -297,8 +395,9 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
           </select>
           <ChevronDown size={15} className="absolute right-3 top-3.5 pointer-events-none text-neutral-400" />
         </div>
-      </div>
+      </div>}
 
+      {!ordering && <>
       {selectedCount > 0 && (
         <div
           className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5 p-3 rounded-lg"
@@ -421,6 +520,7 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
           )}
         </>
       )}
+      </>}
     </div>
   );
 }

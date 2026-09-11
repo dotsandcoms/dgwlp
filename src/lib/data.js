@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { serverClient, hasSupabase, imageUrl } from "./supabase";
 import { colourFromCategory } from "./pricing";
 import { parseAnimalTags, inferAnimalTags } from "./product-tags";
+import { applyStoreOrder } from "./store-order";
 import { MOCK_PRODUCTS, MOCK_CATEGORIES } from "./mock";
 
 // Deterministic gradient so real products (before images load) still render
@@ -53,6 +54,17 @@ async function fetchPublishedProducts(sb) {
   return res;
 }
 
+async function fetchStoreOrderIds() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const sb = url && serviceKey
+    ? createClient(url, serviceKey, { auth: { persistSession: false } })
+    : serverClient();
+  if (!sb) return [];
+  const { data } = await sb.from("site_settings").select("value").eq("key", "store_order").maybeSingle();
+  return Array.isArray(data?.value?.productIds) ? data.value.productIds.filter(Boolean) : [];
+}
+
 export async function getProducts() {
   if (!hasSupabase) return MOCK_PRODUCTS;
   try {
@@ -63,10 +75,17 @@ export async function getProducts() {
     ]);
     if (error || !data) return MOCK_PRODUCTS; // fall back to demo only on a real query failure
     const rangeMap = new Map((ranges || []).map((r) => [r.product_id, r]));
-    return data.map((row) => {
+    const catalogue = data.map((row) => {
       const r = rangeMap.get(row.id);
       return mapRow(row, { priceRange: r ? [r.min_cents / 100, r.max_cents / 100] : [0, 0] });
     });
+    let orderIds = [];
+    try {
+      orderIds = await fetchStoreOrderIds();
+    } catch {
+      orderIds = [];
+    }
+    return applyStoreOrder(catalogue, orderIds);
   } catch {
     return MOCK_PRODUCTS;
   }

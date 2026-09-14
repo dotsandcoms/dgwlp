@@ -63,13 +63,20 @@ export function Card({ p, tileAspect, showShopActions = false }) {
   );
 }
 
-/** Full-bleed category panel — image fills the tile, label sits on the photo. */
+/** Full-bleed category panel — aspect follows the cover print; shorter tiles sit mid-row. */
 function CollectionPanel({ p, delay = 0 }) {
   const category = p.category || "Uncategorised";
   const href = `/shop?category=${encodeURIComponent(category)}`;
+  const ratioKey = p.ratio || "landscape";
+  const ar = RATIOS[ratioKey]?.ar || "3 / 2";
+  const isWide = ratioKey === "pano" || ratioKey === "pan2";
   return (
-    <Reveal delay={delay} className="min-w-0">
-      <Link href={href} className="group relative block overflow-hidden" style={{ aspectRatio: "3/4" }}>
+    <Reveal delay={delay} className={`min-w-0 self-center ${isWide ? "col-span-2" : ""}`}>
+      <Link
+        href={href}
+        className="group relative block overflow-hidden w-full"
+        style={{ aspectRatio: ar, borderRadius: 2 }}
+      >
         <Plate
           product={p}
           showSig={false}
@@ -78,7 +85,7 @@ function CollectionPanel({ p, delay = 0 }) {
         />
         <div
           className="absolute inset-0 flex flex-col justify-end p-4 sm:p-5"
-          style={{ background: "linear-gradient(180deg,transparent 35%,rgba(20,20,18,.78))" }}
+          style={{ background: "linear-gradient(180deg,transparent 40%,rgba(20,20,18,.82))" }}
         >
           <span className="text-white text-[14px] sm:text-[16px] leading-tight" style={{ fontFamily: HEAD }}>{category}</span>
           <span className="text-white/70 text-[11px] tracking-[.14em] mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ fontFamily: HEAD }}>
@@ -181,28 +188,26 @@ function Slideshow({ slides }) {
   );
 }
 
-function onePerCategory(products) {
-  const seen = new Set();
-  const out = [];
-  for (const p of products) {
-    const key = p.category || "Uncategorised";
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(p);
-  }
-  return out;
-}
-
 const TRUST_LINES = [
   "Shipped locally across South Africa and internationally",
 ];
 
-export function Home({ products, featured = [], content: contentProp }) {
+export function Home({ products, featured = [], categoryTiles = [], content: contentProp }) {
   const content = contentProp || mergeSiteContent();
   const howSteps = getHowSteps(content.home);
   const heroP = { image: siteImage("hero.jpg"), colour: "bw", name: "Wildebeest at Dawn" };
   const aboutP = { image: siteImage("about.jpg"), colour: "colour", name: "Doron Goldstein", grad: ["#2f2f2d", "#a9a49b"], angle: 120 };
-  const categories = onePerCategory(products);
+  const categories = categoryTiles?.length
+    ? categoryTiles
+    : (() => {
+        const seen = new Set();
+        return products.filter((p) => {
+          const key = p.category || "Uncategorised";
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      })();
   const featuredPrints = (featured?.length ? featured : products.slice(0, 6)).slice(0, 6);
   const panels = [
     { image: siteImage("elephant-plains.jpg"), name: "Lone Bull", slug: "lone-bull", tag: "ELEPHANTS", cap: "A lone bull on the endless plains" },
@@ -269,8 +274,8 @@ export function Home({ products, featured = [], content: contentProp }) {
           {categories.length === 0 ? (
             <p className="text-[14px] text-neutral-500 text-center py-8">New prints are on their way — check back soon.</p>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
-              {categories.map((p, i) => <CollectionPanel key={p.id} p={p} delay={i * 70} />)}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 items-center">
+              {categories.map((p, i) => <CollectionPanel key={`${p.categoryId || p.category}-${p.id}`} p={p} delay={i * 70} />)}
             </div>
           )}
         </div>

@@ -126,7 +126,15 @@ function LiveAdminApp() {
         {view === "editor" && <LiveEditor editingId={editingId} categories={categories} toast={toast} onSaved={() => { reloadProducts(); setView("products"); }} />}
         {view === "orders" && <LiveOrders orders={orders} onChanged={reloadOrders} toast={toast} />}
         {view === "customers" && <LiveCustomers toast={toast} />}
-        {view === "categories" && <LiveCategories categories={categories} onChanged={reloadCategories} toast={toast} />}
+        {view === "categories" && (
+          <LiveCategories
+            categories={categories}
+            products={products}
+            onChanged={reloadCategories}
+            onProductsChanged={reloadProducts}
+            toast={toast}
+          />
+        )}
         {view === "content" && <LiveContent toast={toast} />}
         {view === "settings" && <LiveSettings toast={toast} />}
       </>)}
@@ -525,12 +533,31 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
   );
 }
 
-function LiveCategories({ categories, onChanged, toast }) {
+function LiveCategories({ categories, products = [], onChanged, onProductsChanged, toast }) {
   const [val, setVal] = useState("");
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editVal, setEditVal] = useState("");
   const [savingId, setSavingId] = useState(null);
+  const [orderItems, setOrderItems] = useState(categories);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [assignCat, setAssignCat] = useState(null);
+  const [assignSelected, setAssignSelected] = useState(() => new Set());
+  const [assignQuery, setAssignQuery] = useState("");
+  const [assignBusy, setAssignBusy] = useState(false);
+  const [covers, setCovers] = useState({});
+  const [coverCat, setCoverCat] = useState(null);
+  const [coverSelected, setCoverSelected] = useState(null);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const dragIndex = useRef(null);
+
+  useEffect(() => {
+    setOrderItems(categories);
+  }, [categories]);
+
+  useEffect(() => {
+    db.fetchCategoryCovers().then(setCovers).catch(() => setCovers({}));
+  }, [categories, products]);
 
   const add = async () => {
     if (!val.trim()) return;
@@ -562,81 +589,354 @@ function LiveCategories({ categories, onChanged, toast }) {
     }
   };
   const remove = async (c) => {
-    try { await db.deleteCategory(c.id); toast("Category removed"); onChanged(); } catch (e) { toast(friendlyError(e, "Failed to remove category")); }
+    if (!window.confirm(`Delete category “${c.name}”? Prints in it will become uncategorised.`)) return;
+    try { await db.deleteCategory(c.id); toast("Category removed"); onChanged(); onProductsChanged?.(); } catch (e) { toast(friendlyError(e, "Failed to remove category")); }
   };
+
+  const moveOrder = (from, to) => {
+    setOrderItems((prev) => {
+      if (from === to || from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev;
+      const next = [...prev];
+      const [row] = next.splice(from, 1);
+      next.splice(to, 0, row);
+      return next;
+    });
+  };
+
+  const saveOrder = async () => {
+    setSavingOrder(true);
+    try {
+      const ids = orderItems.map((c) => c.id);
+      await db.saveCategoryOrder(ids);
+      toast("Category order saved");
+      onChanged();
+    } catch (e) {
+      toast(friendlyError(e, "Could not save category order"));
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
+  const openAssign = (c) => {
+    const inCat = new Set(products.filter((p) => p.category_id === c.id).map((p) => p.id));
+    setAssignSelected(inCat);
+    setAssignQuery("");
+    setAssignCat(c);
+  };
+
+  const toggleAssign = (id) => {
+    setAssignSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const saveAssign = async () => {
+    if (!assignCat) return;
+    setAssignBusy(true);
+    try {
+      const currentlyIn = new Set(products.filter((p) => p.category_id === assignCat.id).map((p) => p.id));
+      const next = assignSelected;
+      const toAdd = [...next].filter((id) => !currentlyIn.has(id));
+      const toRemove = [...currentlyIn].filter((id) => !next.has(id));
+
+      if (toAdd.length) await db.bulkUpdateProductCategory(toAdd, assignCat.id);
+      if (toRemove.length) await db.clearProductCategory(toRemove);
+
+      const coverId = covers[assignCat.id];
+      if (coverId && toRemove.includes(coverId)) {
+        const nextCovers = await db.setCategoryCover(assignCat.id, null);
+        setCovers(nextCovers);
+      }
+
+      toast(`Updated prints in “${assignCat.name}”`);
+      setAssignCat(null);
+      onProductsChanged?.();
+    } catch (e) {
+      toast(friendlyError(e, "Could not update prints"));
+    } finally {
+      setAssignBusy(false);
+    }
+  };
+
+  const openCover = (c) => {
+    const inCat = products.filter((p) => p.category_id === c.id);
+    if (!inCat.length) {
+      toast(`Add prints to “${c.name}” first, then choose a cover`);
+      return;
+    }
+    const current = covers[c.id];
+    const fallback = inCat[0]?.id || null;
+    setCoverSelected(current && inCat.some((p) => p.id === current) ? current : fallback);
+    setCoverCat(c);
+  };
+
+  const saveCover = async () => {
+    if (!coverCat || !coverSelected) return;
+    setCoverBusy(true);
+    try {
+      const next = await db.setCategoryCover(coverCat.id, coverSelected);
+      setCovers(next);
+      toast(`Cover set for “${coverCat.name}”`);
+      setCoverCat(null);
+    } catch (e) {
+      toast(friendlyError(e, "Could not save cover"));
+    } finally {
+      setCoverBusy(false);
+    }
+  };
+
+  const assignList = useMemo(() => {
+    const q = assignQuery.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => `${p.name || ""} ${p.sku || ""}`.toLowerCase().includes(q));
+  }, [products, assignQuery]);
+
+  const coverList = useMemo(() => {
+    if (!coverCat) return [];
+    return products.filter((p) => p.category_id === coverCat.id);
+  }, [products, coverCat]);
+
+  const coverProduct = (catId) => {
+    const id = covers[catId];
+    if (id) {
+      const found = products.find((p) => p.id === id && p.category_id === catId);
+      if (found) return found;
+    }
+    return products.find((p) => p.category_id === catId) || null;
+  };
+
+  const countIn = (catId) => products.filter((p) => p.category_id === catId).length;
+  const orderDirty = orderItems.map((c) => c.id).join(",") !== categories.map((c) => c.id).join(",");
+
   return (
-    <div className="max-w-[520px]">
-      <h3 className="text-[15px] mb-4" style={{ fontFamily: HEAD }}>Photo categories</h3>
-      {categories.length === 0 && <p className="text-[13px] text-neutral-500 mb-3">No categories yet.</p>}
-      {categories.map((c) => (
-        <div key={c.id} className="flex items-center justify-between gap-3 py-3" style={{ borderBottom: `1px solid ${C.line}` }}>
-          {editingId === c.id ? (
-            <input
-              autoFocus
-              value={editVal}
-              onChange={(e) => setEditVal(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") saveEdit(c);
-                if (e.key === "Escape") cancelEdit();
-              }}
-              className="flex-1 py-1.5 px-2 text-[14px] outline-none"
-              style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
-            />
-          ) : (
-            <span className="text-[14px] flex-1 min-w-0">{c.name}</span>
-          )}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {editingId === c.id ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => saveEdit(c)}
-                  disabled={savingId === c.id}
-                  className="text-neutral-500 hover:text-olive p-1"
-                  title="Save"
-                  aria-label="Save category"
-                >
-                  {savingId === c.id ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  className="text-neutral-400 hover:text-neutral-600 p-1"
-                  title="Cancel"
-                  aria-label="Cancel edit"
-                >
-                  <X size={15} />
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => startEdit(c)}
-                  className="text-neutral-400 hover:text-olive p-1"
-                  title="Edit"
-                  aria-label={`Edit ${c.name}`}
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(c)}
-                  className="text-neutral-400 hover:text-red-500 p-1"
-                  title="Delete"
-                  aria-label={`Delete ${c.name}`}
-                >
-                  <Trash2 size={15} />
-                </button>
-              </>
-            )}
-          </div>
+    <div className="max-w-[640px]">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-4">
+        <div>
+          <h3 className="text-[15px] mb-1" style={{ fontFamily: HEAD }}>Photo categories</h3>
+          <p className="text-[13px] text-neutral-500">Drag to set shop order. Use Cover for the home-page tile image, and Prints to assign photos.</p>
         </div>
-      ))}
-      <div className="flex gap-2 mt-4">
+        {orderDirty && (
+          <Pill size="sm" onClick={saveOrder} disabled={savingOrder}>
+            {savingOrder ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save order"}
+          </Pill>
+        )}
+      </div>
+
+      {orderItems.length === 0 && <p className="text-[13px] text-neutral-500 mb-3">No categories yet.</p>}
+      <ul className="rounded-lg overflow-hidden mb-5" style={{ border: orderItems.length ? `1px solid ${C.line}` : "none" }}>
+        {orderItems.map((c, i) => {
+          const cover = coverProduct(c.id);
+          return (
+          <li
+            key={c.id}
+            draggable={editingId !== c.id}
+            onDragStart={() => { dragIndex.current = i; }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              const from = dragIndex.current;
+              if (from == null || from === i || editingId) return;
+              moveOrder(from, i);
+              dragIndex.current = i;
+            }}
+            onDragEnd={() => { dragIndex.current = null; }}
+            className="flex items-center gap-2 px-3 py-2.5 bg-white"
+            style={{ borderTop: i ? `1px solid ${C.line}` : undefined, cursor: editingId === c.id ? "default" : "grab" }}
+          >
+            <GripVertical size={16} className="text-neutral-300 shrink-0" />
+            <span className="w-6 text-[12px] text-neutral-400 tabular-nums shrink-0" style={{ fontFamily: HEAD }}>{i + 1}</span>
+
+            {cover ? (
+              <Plate
+                product={{ image: imageUrl(cover.hero_image), colour: "colour", name: cover.name, grad: ["#333", "#9a9a97"], angle: 120 }}
+                printColour="colour"
+                showSig={false}
+                style={{ width: 36, height: 36, borderRadius: 3, flexShrink: 0 }}
+              />
+            ) : (
+              <div className="w-9 h-9 rounded shrink-0 bg-neutral-100 flex items-center justify-center" style={{ border: `1px solid ${C.line}` }}>
+                <ImageIcon size={14} className="text-neutral-300" />
+              </div>
+            )}
+
+            {editingId === c.id ? (
+              <input
+                autoFocus
+                value={editVal}
+                onChange={(e) => setEditVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveEdit(c);
+                  if (e.key === "Escape") cancelEdit();
+                }}
+                className="flex-1 py-1.5 px-2 text-[14px] outline-none min-w-0"
+                style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
+              />
+            ) : (
+              <div className="flex-1 min-w-0">
+                <div className="text-[14px] truncate">{c.name}</div>
+                <div className="text-[12px] text-neutral-500">{countIn(c.id)} print{countIn(c.id) === 1 ? "" : "s"}{covers[c.id] ? " · cover set" : ""}</div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-0.5 shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+              {editingId === c.id ? (
+                <>
+                  <button type="button" onClick={() => saveEdit(c)} disabled={savingId === c.id} className="text-neutral-500 hover:text-olive p-1.5" title="Save" aria-label="Save category">
+                    {savingId === c.id ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  </button>
+                  <button type="button" onClick={cancelEdit} className="text-neutral-400 hover:text-neutral-600 p-1.5" title="Cancel" aria-label="Cancel edit">
+                    <X size={15} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => moveOrder(i, i - 1)} className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-30" style={{ border: `1px solid ${C.line}` }}>
+                    <ChevronUp size={14} />
+                  </button>
+                  <button type="button" aria-label="Move down" disabled={i === orderItems.length - 1} onClick={() => moveOrder(i, i + 1)} className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-30" style={{ border: `1px solid ${C.line}` }}>
+                    <ChevronDown size={14} />
+                  </button>
+                  <button type="button" onClick={() => openCover(c)} className="text-[12px] px-2.5 py-1.5 rounded-full ml-1" style={{ border: `1px solid ${C.line}`, fontFamily: HEAD }} title="Set cover photo">
+                    Cover
+                  </button>
+                  <button type="button" onClick={() => openAssign(c)} className="text-[12px] px-2.5 py-1.5 rounded-full" style={{ border: `1px solid ${C.line}`, fontFamily: HEAD }} title="Assign prints">
+                    Prints
+                  </button>
+                  <button type="button" onClick={() => startEdit(c)} className="text-neutral-400 hover:text-olive p-1.5" title="Edit" aria-label={`Edit ${c.name}`}>
+                    <Pencil size={15} />
+                  </button>
+                  <button type="button" onClick={() => remove(c)} className="text-neutral-400 hover:text-red-500 p-1.5" title="Delete" aria-label={`Delete ${c.name}`}>
+                    <Trash2 size={15} />
+                  </button>
+                </>
+              )}
+            </div>
+          </li>
+          );
+        })}
+      </ul>
+
+      <div className="flex gap-2">
         <input value={val} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="New category" className="flex-1 py-2.5 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
         <Pill size="sm" onClick={add} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : "Add"}</Pill>
       </div>
+
+      {assignCat && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-6" style={{ background: "rgba(20,20,18,.45)" }} role="dialog" aria-modal="true">
+          <div className="bg-white w-full sm:max-w-[560px] sm:rounded-lg shadow-xl max-h-[88vh] flex flex-col" style={{ border: `1px solid ${C.line}` }}>
+            <div className="flex items-start justify-between gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
+              <div>
+                <h4 className="text-[16px]" style={{ fontFamily: HEAD }}>Assign prints</h4>
+                <p className="text-[13px] text-neutral-500 mt-0.5">Tick prints that belong in “{assignCat.name}”.</p>
+              </div>
+              <button type="button" onClick={() => setAssignCat(null)} className="p-1 text-neutral-400 hover:text-black" aria-label="Close"><X size={20} /></button>
+            </div>
+            <div className="px-5 py-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+              <div className="flex items-center gap-2 px-3" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>
+                <Search size={15} color={C.gray} />
+                <input
+                  value={assignQuery}
+                  onChange={(e) => setAssignQuery(e.target.value)}
+                  placeholder="Search prints…"
+                  className="flex-1 py-2 text-[14px] outline-none bg-transparent"
+                />
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1 px-2 py-2">
+              {assignList.length === 0 ? (
+                <p className="text-[13px] text-neutral-500 text-center py-10">No prints found.</p>
+              ) : (
+                assignList.map((p) => (
+                  <label key={p.id} className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-[#faf9f6] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={assignSelected.has(p.id)}
+                      onChange={() => toggleAssign(p.id)}
+                    />
+                    <Plate
+                      product={{ image: imageUrl(p.hero_image), colour: "colour", name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }}
+                      printColour="colour"
+                      showSig={false}
+                      style={{ width: 40, height: 40, borderRadius: 3, flexShrink: 0 }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[14px] truncate" style={{ fontFamily: HEAD }}>{p.name}</div>
+                      <div className="text-[12px] text-neutral-500 truncate">
+                        {p.category_name || "Uncategorised"}
+                        {p.category_id === assignCat.id ? " · currently here" : ""}
+                      </div>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ borderTop: `1px solid ${C.line}` }}>
+              <span className="text-[13px] text-neutral-500">{assignSelected.size} selected</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setAssignCat(null)} className="text-[13px] px-4 py-2 rounded-full" style={{ border: `1px solid ${C.line}`, fontFamily: HEAD }}>Cancel</button>
+                <Pill size="sm" onClick={saveAssign} disabled={assignBusy}>
+                  {assignBusy ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save"}
+                </Pill>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {coverCat && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-6" style={{ background: "rgba(20,20,18,.45)" }} role="dialog" aria-modal="true">
+          <div className="bg-white w-full sm:max-w-[560px] sm:rounded-lg shadow-xl max-h-[88vh] flex flex-col" style={{ border: `1px solid ${C.line}` }}>
+            <div className="flex items-start justify-between gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
+              <div>
+                <h4 className="text-[16px]" style={{ fontFamily: HEAD }}>Category cover</h4>
+                <p className="text-[13px] text-neutral-500 mt-0.5">Choose the photo shown for “{coverCat.name}” on the home page.</p>
+              </div>
+              <button type="button" onClick={() => setCoverCat(null)} className="p-1 text-neutral-400 hover:text-black" aria-label="Close"><X size={20} /></button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-2 py-2">
+              {coverList.length === 0 ? (
+                <p className="text-[13px] text-neutral-500 text-center py-10">No prints in this category yet.</p>
+              ) : (
+                coverList.map((p) => {
+                  const selected = coverSelected === p.id;
+                  return (
+                    <label key={p.id} className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-[#faf9f6] cursor-pointer">
+                      <input
+                        type="radio"
+                        name={`cover-${coverCat.id}`}
+                        checked={selected}
+                        onChange={() => setCoverSelected(p.id)}
+                      />
+                      <Plate
+                        product={{ image: imageUrl(p.hero_image), colour: "colour", name: p.name, grad: ["#333", "#9a9a97"], angle: 120 }}
+                        printColour="colour"
+                        showSig={false}
+                        style={{ width: 56, height: 56, borderRadius: 3, flexShrink: 0 }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[14px] truncate" style={{ fontFamily: HEAD }}>{p.name}</div>
+                        <div className="text-[12px] text-neutral-500 truncate">
+                          {RATIOS[p.ratio_id || "landscape"]?.label || p.ratio_id || "Landscape"}
+                          {selected ? " · cover" : ""}
+                        </div>
+                      </div>
+                      {selected && <Check size={16} style={{ color: C.green }} className="shrink-0" />}
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4" style={{ borderTop: `1px solid ${C.line}` }}>
+              <button type="button" onClick={() => setCoverCat(null)} className="text-[13px] px-4 py-2 rounded-full" style={{ border: `1px solid ${C.line}`, fontFamily: HEAD }}>Cancel</button>
+              <Pill size="sm" onClick={saveCover} disabled={coverBusy || !coverSelected}>
+                {coverBusy ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save cover"}
+              </Pill>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -5,7 +5,7 @@
 import { browserClient } from "./supabase";
 import { DEFAULT_SETTINGS, mergeSettings } from "./settings";
 import { colourFromCategory } from "./pricing";
-import { applyStoreOrder } from "./store-order";
+import { applyStoreOrder, applyCategoryOrder } from "./store-order";
 import { enrichOrdersWithImages } from "./orders";
 
 export const slugify = (s) =>
@@ -38,18 +38,41 @@ export async function checkIsAdmin() {
 }
 
 /* ------------------------------ categories --------------------------- */
+const CATEGORY_ORDER_KEY = "category_order";
+
+export async function fetchCategoryOrder() {
+  const sb = browserClient();
+  if (!sb) return [];
+  const { data, error } = await sb.from("site_settings").select("value").eq("key", CATEGORY_ORDER_KEY).maybeSingle();
+  if (error) return [];
+  return Array.isArray(data?.value?.categoryIds) ? data.value.categoryIds.filter(Boolean) : [];
+}
+
 export async function fetchCategories() {
   const sb = browserClient();
-  const { data, error } = await sb.from("categories").select("id,name,slug,sort").order("sort");
+  const [{ data, error }, orderIds] = await Promise.all([
+    sb.from("categories").select("id,name,slug,sort").order("sort"),
+    fetchCategoryOrder(),
+  ]);
   if (error) throw error;
-  return data || [];
+  return applyCategoryOrder(data || [], orderIds);
 }
 
 export async function createCategory(name) {
   const sb = browserClient();
   const slug = slugify(name);
-  const { error } = await sb.from("categories").insert({ name, slug });
+  const { data: last } = await sb.from("categories").select("sort").order("sort", { ascending: false }).limit(1).maybeSingle();
+  const sort = (Number(last?.sort) || 0) + 1;
+  const { data, error } = await sb.from("categories").insert({ name, slug, sort }).select("id").maybeSingle();
   if (error) throw error;
+  const newId = data?.id;
+  if (!newId) return;
+  try {
+    const ids = await fetchCategoryOrder();
+    if (ids.length) await saveCategoryOrder([...ids.filter((id) => id !== newId), newId]);
+  } catch {
+    /* order sync is best-effort; category was created */
+  }
 }
 
 export async function updateCategory(id, name) {
@@ -64,6 +87,56 @@ export async function deleteCategory(id) {
   const sb = browserClient();
   const { error } = await sb.from("categories").delete().eq("id", id);
   if (error) throw error;
+  const ids = (await fetchCategoryOrder()).filter((x) => x !== id);
+  if (ids.length) {
+    try { await saveCategoryOrder(ids); } catch { /* ignore */ }
+  }
+}
+
+/** Persist category order. ids[0] is first in shop filters and home browse. */
+export async function saveCategoryOrder(ids) {
+  const sb = browserClient();
+  if (!sb) throw new Error("Not signed in");
+  const list = (Array.isArray(ids) ? ids : []).filter(Boolean).map(String);
+  const { error } = await sb.from("site_settings").upsert(
+    { key: CATEGORY_ORDER_KEY, value: { categoryIds: list }, updated_at: new Date().toISOString() },
+    { onConflict: "key" },
+  );
+  if (error) throw error;
+
+  // Keep categories.sort in sync when RLS allows it (best-effort).
+  for (let i = 0; i < list.length; i++) {
+    const { error: sortErr } = await sb.from("categories").update({ sort: i + 1 }).eq("id", list[i]);
+    if (sortErr) break;
+  }
+  return list;
+}
+
+const CATEGORY_COVERS_KEY = "category_covers";
+
+export async function fetchCategoryCovers() {
+  const sb = browserClient();
+  if (!sb) return {};
+  const { data, error } = await sb.from("site_settings").select("value").eq("key", CATEGORY_COVERS_KEY).maybeSingle();
+  if (error) return {};
+  const covers = data?.value?.covers;
+  return covers && typeof covers === "object" ? covers : {};
+}
+
+/** Set which product image is used on the home “Browse by category” tile. */
+export async function setCategoryCover(categoryId, productId) {
+  const sb = browserClient();
+  if (!sb) throw new Error("Not signed in");
+  if (!categoryId) throw new Error("Category required");
+  const covers = { ...(await fetchCategoryCovers()) };
+  if (productId) covers[categoryId] = productId;
+  else delete covers[categoryId];
+  const { error } = await sb.from("site_settings").upsert(
+    { key: CATEGORY_COVERS_KEY, value: { covers }, updated_at: new Date().toISOString() },
+    { onConflict: "key" },
+  );
+  if (error) throw error;
+  return covers;
 }
 
 /* ------------------------------- products ----------------------------- */
@@ -169,7 +242,15 @@ export async function deleteProduct(id) {
   if (error) throw error;
 }
 
-/** Move many products into one category in a single update. */
+/** Clear category on products (uncategorised). */
+export async function clearProductCategory(ids) {
+  const sb = browserClient();
+  const list = [...new Set((ids || []).filter(Boolean))];
+  if (!list.length) return 0;
+  const { error } = await sb.from("products").update({ category_id: null, colour: "colour" }).in("id", list);
+  if (error) throw error;
+  return list.length;
+}
 export async function bulkUpdateProductCategory(ids, categoryId) {
   const sb = browserClient();
   const list = Array.isArray(ids) ? ids.filter(Boolean) : [];

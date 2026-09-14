@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { serverClient, hasSupabase, imageUrl } from "./supabase";
 import { colourFromCategory } from "./pricing";
 import { parseAnimalTags, inferAnimalTags } from "./product-tags";
-import { applyStoreOrder } from "./store-order";
+import { applyStoreOrder, applyCategoryOrder } from "./store-order";
 import { MOCK_PRODUCTS, MOCK_CATEGORIES } from "./mock";
 
 // Deterministic gradient so real products (before images load) still render
@@ -122,11 +122,92 @@ export async function getCategories() {
   if (!hasSupabase) return MOCK_CATEGORIES;
   try {
     const sb = serverClient();
-    const { data, error } = await sb.from("categories").select("name").order("sort");
+    const [{ data, error }, orderIds] = await Promise.all([
+      sb.from("categories").select("id,name,sort").order("sort"),
+      fetchCategoryOrderIds(),
+    ]);
     if (error || !data) return MOCK_CATEGORIES;
-    return data.map((c) => c.name);
+    return applyCategoryOrder(data, orderIds).map((c) => c.name);
   } catch {
     return MOCK_CATEGORIES;
+  }
+}
+
+async function fetchSiteSettingValue(key) {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const sb = url && serviceKey
+    ? createClient(url, serviceKey, { auth: { persistSession: false } })
+    : serverClient();
+  if (!sb) return null;
+  const { data } = await sb.from("site_settings").select("value").eq("key", key).maybeSingle();
+  return data?.value ?? null;
+}
+
+async function fetchCategoryOrderIds() {
+  try {
+    const value = await fetchSiteSettingValue("category_order");
+    return Array.isArray(value?.categoryIds) ? value.categoryIds.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchCategoryCoversServer() {
+  try {
+    const value = await fetchSiteSettingValue("category_covers");
+    const covers = value?.covers;
+    return covers && typeof covers === "object" ? covers : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * One cover product per category for the home “Browse by category” grid,
+ * ordered by admin category order. Uses cover assignment when set.
+ */
+export async function getCategoryBrowseTiles(allProducts) {
+  const catalogue = Array.isArray(allProducts) ? allProducts : await getProducts();
+  if (!hasSupabase) {
+    const seen = new Set();
+    return catalogue.filter((p) => {
+      if (!p.category || seen.has(p.category)) return false;
+      seen.add(p.category);
+      return true;
+    });
+  }
+  try {
+    const sb = serverClient();
+    const [{ data: cats, error }, orderIds, covers] = await Promise.all([
+      sb.from("categories").select("id,name,sort").order("sort"),
+      fetchCategoryOrderIds(),
+      fetchCategoryCoversServer(),
+    ]);
+    if (error || !cats?.length) {
+      const seen = new Set();
+      return catalogue.filter((p) => {
+        if (!p.category || seen.has(p.category)) return false;
+        seen.add(p.category);
+        return true;
+      });
+    }
+    return applyCategoryOrder(cats, orderIds)
+      .map((cat) => {
+        const inCat = catalogue.filter((p) => p.category === cat.name);
+        if (!inCat.length) return null;
+        const coverId = covers[cat.id];
+        const cover = (coverId && inCat.find((p) => p.id === coverId)) || inCat[0];
+        return cover ? { ...cover, category: cat.name, categoryId: cat.id } : null;
+      })
+      .filter(Boolean);
+  } catch {
+    const seen = new Set();
+    return catalogue.filter((p) => {
+      if (!p.category || seen.has(p.category)) return false;
+      seen.add(p.category);
+      return true;
+    });
   }
 }
 

@@ -120,7 +120,7 @@ export function RoomPreview({ product, size, material, frameCol, room, onZoom, p
         }}
       >
         {place.capped ? "Large format · " : "Shown to scale · "}
-        {place.printW} × {place.printH} mm
+        {place.printW / 10} × {place.printH / 10} cm
       </div>
     </div>
   );

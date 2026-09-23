@@ -39,6 +39,8 @@ const FOLDER_TO_CATEGORY = {
 };
 
 const RATIO_TARGETS = [
+  { id: "port12", r: 1 / 2 },
+  { id: "port23", r: 2 / 3 },
   { id: "portrait", r: 3 / 4 },
   { id: "landscape", r: 3 / 2 },
   { id: "pan2", r: 2 / 1 },

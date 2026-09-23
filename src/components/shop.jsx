@@ -209,7 +209,7 @@ export function ShopClient({ products, categories }) {
     const qs = params.toString();
     const href = qs ? `/shop?${qs}` : "/shop";
     startTransition(() => {
-      router.replace(href, { scroll: false });
+      router.push(href, { scroll: false });
     });
   };
 

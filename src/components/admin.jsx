@@ -1,9 +1,9 @@
 "use client";
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { LayoutDashboard, ImageIcon, Upload, Package, Tag, Plus, Pencil, Trash2, Check, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, TrendingUp, CreditCard, Lock, Loader2, Search, Settings, Star, X, Users, FileText, GripVertical } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, CATEGORY_NAMES, rangeOf, colourFromCategory } from "@/lib/pricing";
+import { C, HEAD, zar, RATIOS, MATERIALS, PRICING, CATEGORY_NAMES, rangeOf, colourFromCategory, sizeLabel } from "@/lib/pricing";
 import { animalTagsFromInput, animalTagsToInput, ANIMAL_SUGGESTIONS, formatAnimalTag, inferAnimalTags } from "@/lib/product-tags";
 import { MOCK_PRODUCTS, MOCK_ORDERS, SALES } from "@/lib/mock";
 import { hasSupabase, imageUrl } from "@/lib/supabase";
@@ -21,7 +21,13 @@ import { adminPath } from "@/lib/admin-path";
 
 export function AdminApp() {
   // Never expose the demo admin console in production.
-  if (hasSupabase) return <LiveAdminGate />;
+  if (hasSupabase) {
+    return (
+      <Suspense fallback={<div className="max-w-[1240px] mx-auto px-5 py-24 text-center text-neutral-500 text-[14px] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading…</div>}>
+        <LiveAdminGate />
+      </Suspense>
+    );
+  }
   if (process.env.NODE_ENV === "production") {
     return <NotFoundView />;
   }
@@ -52,7 +58,10 @@ function LiveAdminGate() {
     return () => { cancelled = true; };
   }, [sessionUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!adminReady || (sessionUser && localAdmin === null)) {
+  const allowed = localAdmin === true || isAdmin === true;
+
+  // Keep the console mounted while auth re-verifies (tab focus) so forms aren't wiped.
+  if ((!adminReady && !allowed) || (sessionUser && localAdmin === null && !allowed)) {
     return <div className="max-w-[1240px] mx-auto px-5 py-24 text-center text-neutral-500 text-[14px] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Checking access…</div>;
   }
   if (!sessionUser) {
@@ -65,7 +74,6 @@ function LiveAdminGate() {
       </div>
     );
   }
-  const allowed = localAdmin === true || isAdmin === true;
   if (!allowed) {
     return (
       <div className="max-w-[560px] mx-auto px-5 py-24 text-center">
@@ -73,7 +81,7 @@ function LiveAdminGate() {
         <h1 className="text-[22px] mb-2" style={{ fontFamily: HEAD }}>Not authorized</h1>
         <p className="text-[14px] text-neutral-600 mb-4">This account does not have access to the store console.</p>
         <p className="text-[12px] text-neutral-400 mb-6">Signed in as {sessionUser.email}. Run <code style={{ fontFamily: "monospace" }}>fix_admin_access.sql</code> in Supabase if this is wrong.</p>
-        <Pill onClick={() => router.push("/")}>Back to site</Pill>
+        <Pill onClick={() => router.push("/shop")}>Back to shop</Pill>
       </div>
     );
   }
@@ -82,13 +90,25 @@ function LiveAdminGate() {
 
 function LiveAdminApp() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [view, setView] = useState("dashboard");
-  const [editingId, setEditingId] = useState(null);
+  const viewParam = searchParams.get("tab") || "dashboard";
+  const editParam = searchParams.get("edit");
+  const view = viewParam;
+  const editingId = view === "editor" ? (editParam || null) : null;
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [orders, setOrders] = useState([]);
+
+  const setAdminView = useCallback((nextView, editId = null) => {
+    const params = new URLSearchParams();
+    params.set("tab", nextView);
+    if (nextView === "editor" && editId) params.set("edit", editId);
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  }, [router, pathname]);
 
   const reloadProducts = useCallback(() => db.fetchProducts().then(setProducts).catch((e) => toast(friendlyError(e, "Failed to load products"))), [toast]);
   const reloadCategories = useCallback(() => db.fetchCategories().then(setCategories).catch((e) => toast(friendlyError(e, "Failed to load categories"))), [toast]);
@@ -103,18 +123,26 @@ function LiveAdminApp() {
   }, [toast]);
 
   const nav = [["dashboard", "Dashboard", LayoutDashboard], ["products", "Products", ImageIcon], ["featured", "Featured", Star], ["editor", "Add / edit print", Upload], ["orders", "Orders", Package], ["customers", "Customers", Users], ["categories", "Categories", Tag], ["content", "Content", FileText], ["settings", "Settings", Settings]];
-  const openEditor = (id = null) => { setEditingId(id); setView("editor"); };
+  const openEditor = (id = null) => setAdminView("editor", id);
+
+  const leaveAdmin = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/shop");
+  };
 
   return (
     <div className="max-w-[1240px] mx-auto px-5 py-8">
       <div className="mb-4 p-3 rounded text-[12px]" style={{ background: C.greenSoft, color: C.greenDark }}>Connected to Supabase — changes here affect the live store.</div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[26px]" style={{ fontFamily: HEAD, fontWeight: 400 }}>Store Admin</h1>
-        <button onClick={() => router.push("/")} className="text-[13px] text-neutral-500">← Back to store</button>
+        <button type="button" onClick={leaveAdmin} className="text-[13px] text-neutral-500">← Back</button>
       </div>
       <div className="flex gap-2 flex-wrap mb-8 overflow-x-auto no-scrollbar">
         {nav.map(([id, label, Icon]) => (
-          <button key={id} onClick={() => (id === "editor" ? openEditor(null) : setView(id))} className="flex items-center gap-2 text-[13px] px-4 py-2 rounded-full shrink-0" style={{ background: view === id ? C.green : "#fff", color: view === id ? "#fff" : C.ink, border: `1px solid ${view === id ? C.green : C.line}`, fontFamily: HEAD }}><Icon size={15} /> {label}</button>
+          <button key={id} type="button" onClick={() => (id === "editor" ? openEditor(null) : setAdminView(id))} className="flex items-center gap-2 text-[13px] px-4 py-2 rounded-full shrink-0" style={{ background: view === id ? C.green : "#fff", color: view === id ? "#fff" : C.ink, border: `1px solid ${view === id ? C.green : C.line}`, fontFamily: HEAD }}><Icon size={15} /> {label}</button>
         ))}
       </div>
       {loading ? (
@@ -123,7 +151,7 @@ function LiveAdminApp() {
         {view === "dashboard" && <LiveDash products={products} orders={orders} onChanged={reloadOrders} toast={toast} />}
         {view === "products" && <LiveProducts products={products} categories={categories} onEdit={openEditor} onDeleted={reloadProducts} toast={toast} />}
         {view === "featured" && <LiveFeatured products={products} toast={toast} />}
-        {view === "editor" && <LiveEditor editingId={editingId} categories={categories} toast={toast} onSaved={() => { reloadProducts(); setView("products"); }} />}
+        {view === "editor" && <LiveEditor editingId={editingId} categories={categories} toast={toast} onSaved={() => { reloadProducts(); setAdminView("products"); }} />}
         {view === "orders" && <LiveOrders orders={orders} onChanged={reloadOrders} toast={toast} />}
         {view === "customers" && <LiveCustomers toast={toast} />}
         {view === "categories" && (
@@ -206,25 +234,6 @@ function LiveProducts({ products, categories = [], onEdit, onDeleted, toast }) {
       return next.size === prev.size ? prev : next;
     });
   }, [products]);
-
-  // One-time per browser session: align DB colour with category
-  useEffect(() => {
-    let cancelled = false;
-    try {
-      if (sessionStorage.getItem("dg_colour_synced_v1")) return undefined;
-    } catch {}
-    db.bulkSyncPrintColours()
-      .then(({ colour, bw }) => {
-        if (cancelled) return;
-        try { sessionStorage.setItem("dg_colour_synced_v1", "1"); } catch {}
-        toast(`Print colours synced · ${colour} colour · ${bw} black & white`);
-        onDeleted();
-      })
-      .catch((e) => {
-        if (!cancelled) toast(friendlyError(e, "Could not sync print colours"));
-      });
-    return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleOne = (id) => {
     setSelected((prev) => {
@@ -987,11 +996,12 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
     if (!categoryId && categories.length) setCategoryId(categories[0].id);
   }, [categories, categoryId]);
 
-  // Print colour follows category — only Black & White is mono
+  // Suggest colour from category for new prints only — editors can override.
   useEffect(() => {
+    if (editingId) return;
     const cat = categories.find((c) => c.id === categoryId);
     if (cat) setColour(colourFromCategory(cat.name));
-  }, [categoryId, categories]);
+  }, [categoryId, categories, editingId]);
 
   // Default price grid for the chosen ratio (only when not editing an existing product)
   useEffect(() => {
@@ -1008,6 +1018,7 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
       setName(product.name);
       setCategoryId(product.category_id || "");
       setRatio(product.ratio_id);
+      setColour(product.colour === "bw" ? "bw" : "colour");
       setDesc(product.description || "");
       setAnimalTagsInput(animalTagsToInput(product.animal_tags));
       setExistingImage(product.hero_image || null);
@@ -1104,10 +1115,17 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
             {ANIMAL_SUGGESTIONS.map((a) => <option key={a} value={formatAnimalTag(a)} />)}
           </datalist>
           <p className="text-[12px] text-neutral-500 mb-3">Comma-separated — powers shop search (e.g. “leopard”, “lion”).</p>
-          <div className="mt-3 text-[14px] text-neutral-600">
-            Print colour: <span style={{ fontFamily: HEAD, color: C.ink }}>{colour === "bw" ? "Black & White" : "Colour"}</span>
-            <span className="block text-[12px] text-neutral-500 mt-1">Set by category — only “Black & White” prints are mono.</span>
-          </div>
+          <label className="block text-[12px] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>Print colour</label>
+          <select
+            value={colour}
+            onChange={(e) => setColour(e.target.value)}
+            className="w-full py-3 px-3 text-[14px] outline-none mb-1"
+            style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
+          >
+            <option value="colour">Colour</option>
+            <option value="bw">Black &amp; White</option>
+          </select>
+          <p className="text-[12px] text-neutral-500 mb-3">Shown on the product page and used for search (e.g. “black and white”).</p>
         </div>
         <div>
           <h3 className="text-[15px] mb-1" style={{ fontFamily: HEAD }}>3 · Sizes &amp; finishes — set a price for each</h3>
@@ -1118,7 +1136,7 @@ function LiveEditor({ editingId, categories, toast, onSaved }) {
               <thead><tr className="text-neutral-500 text-[11px]"><th className="text-left font-normal py-2 pr-3">SIZE</th>{onMats.map((m) => <th key={m.id} className="font-normal py-2 px-2 text-center">{m.label.replace("Canvas — ", "Cv ").replace("Paper — ", "Pa ")}</th>)}</tr></thead>
               <tbody>{RATIOS[ratio].sizes.map((s) => (
                 <tr key={s} style={{ borderTop: `1px solid ${C.line}`, opacity: enabledSizes[s] ? 1 : .45 }}>
-                  <td className="py-2 pr-3"><label className="flex items-center gap-2"><input type="checkbox" checked={!!enabledSizes[s]} onChange={(e) => setEnabledSizes({ ...enabledSizes, [s]: e.target.checked })} /><span style={{ fontFamily: HEAD }}>{s}</span></label></td>
+                  <td className="py-2 pr-3"><label className="flex items-center gap-2"><input type="checkbox" checked={!!enabledSizes[s]} onChange={(e) => setEnabledSizes({ ...enabledSizes, [s]: e.target.checked })} /><span style={{ fontFamily: HEAD }}>{sizeLabel(s)}</span></label></td>
                   {onMats.map((m) => (<td key={m.id} className="py-1.5 px-2"><div className="flex items-center gap-0.5"><span className="text-[11px] text-neutral-400">R</span><input type="number" disabled={!enabledSizes[s]} value={prices[`${s}:${m.i}`] ?? ""} onChange={(e) => setPrices({ ...prices, [`${s}:${m.i}`]: e.target.value })} className="w-16 py-1 px-1 text-[12px] text-right outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 3 }} /></div></td>))}
                 </tr>))}</tbody>
             </table>
@@ -1154,7 +1172,7 @@ function DemoAdminApp() {
       <div className="mb-4 p-3 rounded text-[12px]" style={{ background: C.greenSoft, color: C.greenDark }}>Demo admin — running on sample data. Connect Supabase to manage real products & orders.</div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[26px]" style={{ fontFamily: HEAD, fontWeight: 400 }}>Store Admin</h1>
-        <button onClick={() => router.push("/")} className="text-[13px] text-neutral-500">← Back to store</button>
+        <button type="button" onClick={() => { if (typeof window !== "undefined" && window.history.length > 1) router.back(); else router.push("/shop"); }} className="text-[13px] text-neutral-500">← Back</button>
       </div>
       <div className="flex gap-2 flex-wrap mb-8 overflow-x-auto no-scrollbar">
         {nav.map(([id, label, Icon]) => (
@@ -1411,10 +1429,6 @@ function DemoEditor({ toast }) {
   const [prices, setPrices] = useState({});
 
   useEffect(() => {
-    setColour(colourFromCategory(category));
-  }, [category]);
-
-  useEffect(() => {
     const es = {}; const pr = {};
     RATIOS[ratio].sizes.forEach((s) => { es[s] = true; PRICING[s].forEach((v, mi) => { pr[`${s}:${mi}`] = v; }); });
     setEnabledSizes(es); setPrices(pr);
@@ -1447,11 +1461,17 @@ function DemoEditor({ toast }) {
             <div className="relative"><select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{CATEGORY_NAMES.map((c) => <option key={c}>{c}</option>)}</select><ChevronDown size={16} className="absolute right-3 top-3.5 pointer-events-none" /></div>
             <div className="relative"><select value={ratio} onChange={(e) => setRatio(e.target.value)} className="w-full appearance-none py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}>{Object.entries(RATIOS).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}</select><ChevronDown size={16} className="absolute right-3 top-3.5 pointer-events-none" /></div>
           </div>
-          <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" rows={3} className="w-full py-3 px-3 text-[14px] outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
-          <div className="mt-3 text-[14px] text-neutral-600">
-            Print colour: <span style={{ fontFamily: HEAD, color: C.ink }}>{colour === "bw" ? "Black & White" : "Colour"}</span>
-            <span className="block text-[12px] text-neutral-500 mt-1">Set by category — only “Black & White” prints are mono.</span>
-          </div>
+          <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" rows={3} className="w-full py-3 px-3 text-[14px] outline-none mb-3" style={{ border: `1px solid ${C.line}`, borderRadius: 4 }} />
+          <label className="block text-[12px] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>Print colour</label>
+          <select
+            value={colour}
+            onChange={(e) => setColour(e.target.value)}
+            className="w-full py-3 px-3 text-[14px] outline-none mb-1"
+            style={{ border: `1px solid ${C.line}`, borderRadius: 4 }}
+          >
+            <option value="colour">Colour</option>
+            <option value="bw">Black &amp; White</option>
+          </select>
         </div>
         <div>
           <h3 className="text-[15px] mb-1" style={{ fontFamily: HEAD }}>3 · Sizes & finishes — set a price for each</h3>
@@ -1462,7 +1482,7 @@ function DemoEditor({ toast }) {
               <thead><tr className="text-neutral-500 text-[11px]"><th className="text-left font-normal py-2 pr-3">SIZE</th>{onMats.map((m) => <th key={m.id} className="font-normal py-2 px-2 text-center">{m.label.replace("Canvas — ", "Cv ").replace("Paper — ", "Pa ")}</th>)}</tr></thead>
               <tbody>{RATIOS[ratio].sizes.map((s) => (
                 <tr key={s} style={{ borderTop: `1px solid ${C.line}`, opacity: enabledSizes[s] ? 1 : .45 }}>
-                  <td className="py-2 pr-3"><label className="flex items-center gap-2"><input type="checkbox" checked={!!enabledSizes[s]} onChange={(e) => setEnabledSizes({ ...enabledSizes, [s]: e.target.checked })} /><span style={{ fontFamily: HEAD }}>{s}</span></label></td>
+                  <td className="py-2 pr-3"><label className="flex items-center gap-2"><input type="checkbox" checked={!!enabledSizes[s]} onChange={(e) => setEnabledSizes({ ...enabledSizes, [s]: e.target.checked })} /><span style={{ fontFamily: HEAD }}>{sizeLabel(s)}</span></label></td>
                   {onMats.map((m) => (<td key={m.id} className="py-1.5 px-2"><div className="flex items-center gap-0.5"><span className="text-[11px] text-neutral-400">R</span><input type="number" disabled={!enabledSizes[s]} value={prices[`${s}:${m.i}`] ?? ""} onChange={(e) => setPrices({ ...prices, [`${s}:${m.i}`]: e.target.value })} className="w-16 py-1 px-1 text-[12px] text-right outline-none" style={{ border: `1px solid ${C.line}`, borderRadius: 3 }} /></div></td>))}
                 </tr>))}</tbody>
             </table>

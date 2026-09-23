@@ -91,6 +91,18 @@ function AuthProvider({ children }) {
         setSessionUser(authUser || null);
         return;
       }
+      // Supabase re-emits SIGNED_IN on tab focus for an already-valid session.
+      if (event === "SIGNED_IN" && authUser?.id) {
+        let sameUser = false;
+        setSessionUser((prev) => {
+          if (prev?.id && prev.id === authUser.id) {
+            sameUser = true;
+            return authUser;
+          }
+          return prev;
+        });
+        if (sameUser) return;
+      }
       setSessionUser(authUser || null);
       setAdminReady(false);
       try {

@@ -21,6 +21,8 @@ export const PROVINCES = ["Gauteng", "Western Cape", "KwaZulu-Natal", "Eastern C
 export const RATIOS = {
   landscape: { label: "Landscape 3:2", ar: "3 / 2", sizes: ["600x400", "900x600", "1200x800", "1500x1000"] },
   portrait: { label: "Portrait 3:4", ar: "3 / 4", sizes: ["300x400", "600x800", "900x1200", "1200x1600"] },
+  port23: { label: "Portrait 2:3", ar: "2 / 3", sizes: ["400x600", "600x900", "800x1200", "1000x1500"] },
+  port12: { label: "Portrait 1:2", ar: "1 / 2", sizes: ["300x600", "400x800", "500x1000", "600x1200"] },
   pano: { label: "Panoramic 3:1", ar: "3 / 1", sizes: ["1200x400", "1800x600", "2400x800"] },
   pan2: { label: "Wide Pan 2:1", ar: "2 / 1", sizes: ["800x400", "1000x500", "1200x600", "2000x1000"] },
 };
@@ -43,6 +45,12 @@ export const PRICING = {
   "2000x1000": [4000, 7900, 4000, 7900, 6300], "300x400": [1500, 2300, 1500, 2300, 1900],
   "600x800": [2000, 3200, 2000, 3200, 2700], "900x1200": [2800, 5300, 2800, 5300, 3900],
   "1200x1600": [3700, 7500, 3700, 7500, 4900],
+  // Portrait 2:3
+  "400x600": [1500, 2300, 1500, 2300, 1900], "600x900": [2000, 3200, 2000, 3200, 2700],
+  "800x1200": [2800, 5300, 2800, 5300, 3900], "1000x1500": [3700, 7500, 3700, 7500, 4900],
+  // Portrait 1:2
+  "300x600": [1500, 2300, 1500, 2300, 1900], "400x800": [2000, 3200, 2000, 3200, 2700],
+  "500x1000": [2800, 5300, 2800, 5300, 3900], "600x1200": [3700, 7500, 3700, 7500, 4900],
 };
 
 export const FRAME_COLOURS = [
@@ -115,6 +123,8 @@ export const SCALE = {
   "600x400": 34, "900x600": 44, "1200x800": 56, "1500x1000": 66, "300x400": 24, "600x800": 32,
   "900x1200": 42, "1200x1600": 52, "1200x400": 72, "1800x600": 82, "2400x800": 92,
   "800x400": 46, "1000x500": 54, "1200x600": 62, "2000x1000": 84,
+  "400x600": 28, "600x900": 36, "800x1200": 46, "1000x1500": 56,
+  "300x600": 26, "400x800": 34, "500x1000": 42, "600x1200": 50,
 };
 
 export const sizesOf = (p) => (RATIOS[p.ratio] || RATIOS.landscape).sizes;
@@ -129,7 +139,12 @@ export const rangeOf = (p) => {
   sizesOf(p).forEach((s) => PRICING[s].forEach((v) => all.push(v)));
   return [Math.min(...all), Math.max(...all)];
 };
-export const sizeLabel = (s) => { const [w, h] = s.split("x"); return `${w} × ${h} mm`; };
+/** Customer-facing size label — stored as mm IDs, shown in cm (600x400 → 60 × 40 cm). */
+export const sizeLabel = (s) => {
+  const [w, h] = String(s || "").split("x").map(Number);
+  if (!w || !h) return String(s || "");
+  return `${w / 10} × ${h / 10} cm`;
+};
 
 // Product-aware price lookups: use a product's real Supabase variant prices
 // (product.variants: { "size:material": rands }) when present, otherwise

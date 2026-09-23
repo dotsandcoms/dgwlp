@@ -188,7 +188,9 @@ function SiteSearch({ open, onClose }) {
             slug: row.slug,
             name: row.name,
             sku: row.sku,
-            colour: colourFromCategory(row.categories?.name),
+            colour: row.colour === "bw" || row.colour === "colour"
+              ? row.colour
+              : colourFromCategory(row.categories?.name),
             desc: row.description || "",
             category: row.categories?.name || "",
             animalTags: inferAnimalTags({ animalTags: row.animal_tags, name: row.name, category: row.categories?.name }),

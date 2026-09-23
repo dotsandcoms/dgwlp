@@ -130,7 +130,7 @@ export function formatItemSummary(item) {
   if (mat) parts.push(MATERIAL_LABEL[mat] || String(mat).replace(/_/g, " "));
   if (size) {
     const pretty = String(size).includes("x")
-      ? String(size).replace(/x/i, " × ") + " mm"
+      ? String(size).split("x").map((n) => Number(n) / 10).join(" × ") + " cm"
       : String(size);
     parts.push(pretty);
   }

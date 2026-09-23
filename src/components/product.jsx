@@ -33,7 +33,9 @@ export function ProductDetail({ product }) {
   const { toast } = useToast();
   const { money } = useDisplayCurrency();
   const sizes = availableSizesOf(product);
-  const printColour = colourFromCategory(product.category);
+  const printColour = product.colour === "bw" || product.colour === "colour"
+    ? product.colour
+    : colourFromCategory(product.category);
   const [size, setSize] = useState(sizes[0] || "");
   const matsForSize = availableMaterialsFor(product, size);
   const availableTypes = PRINT_TYPES.filter((t) => matsForSize.some((m) => printTypeOf(m.id) === t.id));
@@ -91,10 +93,19 @@ export function ProductDetail({ product }) {
     : "/shop";
 
   const goBack = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
+    if (typeof window === "undefined") {
+      router.push(shopHref);
       return;
     }
+    try {
+      const ref = document.referrer ? new URL(document.referrer) : null;
+      const sameOrigin = ref && ref.origin === window.location.origin;
+      const fromShopOrProduct = sameOrigin && (ref.pathname.startsWith("/shop") || ref.pathname.startsWith("/product"));
+      if (fromShopOrProduct && window.history.length > 1) {
+        router.back();
+        return;
+      }
+    } catch { /* ignore */ }
     router.push(shopHref);
   };
 

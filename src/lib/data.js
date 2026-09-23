@@ -23,7 +23,7 @@ function mapRow(row, { priceRange, variants } = {}) {
     name: row.name,
     category,
     ratio: row.ratio_id || "landscape",
-    colour: colourFromCategory(category),
+    colour: row.colour === "bw" || row.colour === "colour" ? row.colour : colourFromCategory(category),
     sku: row.sku,
     desc: row.description || "",
     animalTags,

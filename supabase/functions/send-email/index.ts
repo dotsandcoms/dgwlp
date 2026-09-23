@@ -201,7 +201,9 @@ function formatItemSummary(item: Record<string, unknown>) {
   const frame = scrub(item?.frameCol || item?.frame_colour_id || item?.frameColour, 40);
   if (mat) parts.push(MATERIAL_LABEL[mat] || mat.replace(/_/g, " "));
   if (size) {
-    parts.push(size.includes("x") ? size.replace(/x/i, " × ") + " mm" : size);
+    parts.push(size.includes("x")
+      ? size.split("x").map((n) => String(Number(n) / 10)).join(" × ") + " cm"
+      : size);
   }
   if (frame) parts.push(FRAME_LABEL[frame] || frame);
   return parts.join(" · ") || existing;

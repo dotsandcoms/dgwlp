@@ -247,7 +247,7 @@ export async function clearProductCategory(ids) {
   const sb = browserClient();
   const list = [...new Set((ids || []).filter(Boolean))];
   if (!list.length) return 0;
-  const { error } = await sb.from("products").update({ category_id: null, colour: "colour" }).in("id", list);
+  const { error } = await sb.from("products").update({ category_id: null }).in("id", list);
   if (error) throw error;
   return list.length;
 }
@@ -256,10 +256,7 @@ export async function bulkUpdateProductCategory(ids, categoryId) {
   const list = Array.isArray(ids) ? ids.filter(Boolean) : [];
   if (!list.length) throw new Error("Select at least one print");
   if (!categoryId) throw new Error("Choose a category");
-  const cats = await fetchCategories();
-  const dest = cats.find((c) => c.id === categoryId);
-  const colour = colourFromCategory(dest?.name);
-  const { error } = await sb.from("products").update({ category_id: categoryId, colour }).in("id", list);
+  const { error } = await sb.from("products").update({ category_id: categoryId }).in("id", list);
   if (error) throw error;
   return list.length;
 }

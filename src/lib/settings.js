@@ -10,7 +10,7 @@ export const DEFAULT_SETTINGS = {
     allFree: false, // legacy; if true, standard is free (express still charged)
     internationalQuote: true,
     internationalUnframedOnly: true,
-    internationalNote: "International shipping is quoted on request.",
+    internationalNote: "Submit your order and we'll email a shipping quote. You can confirm or decline before paying.",
   },
   tax: {
     enabled: false,

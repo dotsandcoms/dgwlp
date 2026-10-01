@@ -8,9 +8,30 @@ import { friendlyError } from "@/lib/errors";
 import * as db from "@/lib/admin-data";
 import { Plate, Pill, StatusBadge } from "./primitives";
 
-export const ORDER_STATUSES = ["pending", "paid", "shipped", "delivered", "cancelled", "refunded"];
+export const ORDER_STATUSES = [
+  "awaiting_quote",
+  "quote_sent",
+  "quote_accepted",
+  "pending",
+  "paid",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "refunded",
+];
 
 const STATUS_FLOW = ["pending", "paid", "shipped", "delivered"];
+const STATUS_LABELS = {
+  awaiting_quote: "Waiting on shipping quote",
+  quote_sent: "Shipping quote sent",
+  quote_accepted: "Quote accepted — pay now",
+  pending: "Pending",
+  paid: "Paid",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  refunded: "Refunded",
+};
 
 function statusSteps(status) {
   const raw = String(status || "pending").toLowerCase();
@@ -114,6 +135,7 @@ function AdminOrderModal({ orderId, onClose, onChanged, toast }) {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("pending");
   const [tracking, setTracking] = useState("");
+  const [quoteShipping, setQuoteShipping] = useState("");
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -133,6 +155,7 @@ function AdminOrderModal({ orderId, onClose, onChanged, toast }) {
         setOrder(detail);
         setStatus(detail.status || "pending");
         setTracking(detail.tracking || "");
+        setQuoteShipping(detail.shipping > 0 ? String(detail.shipping) : "");
       } catch (e) {
         if (!cancelled) {
           toast?.(friendlyError(e, "Could not load order"));
@@ -144,6 +167,10 @@ function AdminOrderModal({ orderId, onClose, onChanged, toast }) {
     })();
     return () => { cancelled = true; };
   }, [orderId, onClose, toast]);
+
+  const isInternational = order?.delivery?.destination === "international"
+    || order?.shippingMethod === "international"
+    || ["awaiting_quote", "quote_sent", "quote_accepted"].includes(order?.status);
 
   const save = async () => {
     if (!order) return;
@@ -165,18 +192,59 @@ function AdminOrderModal({ orderId, onClose, onChanged, toast }) {
       toast?.(`Order ${updated.order_no} updated`);
       onChanged?.();
 
-      // Email the customer on every status change (Resend; no-ops without RESEND_API_KEY).
       if (statusChanged) {
         const mail = await db.notifyOrderStatusEmail(updated, status);
-        if (mail?.ok) toast?.(`Customer notified (${status})`);
-        else if (mail?.skipped) {
-          // Quiet when email is not configured or address is invalid
-        } else if (mail?.error) {
-          toast?.("Order updated, but the customer email failed to send");
-        }
+        if (mail?.ok) toast?.(`Customer notified (${STATUS_LABELS[status] || status})`);
+        else if (mail?.error) toast?.("Order updated, but the customer email failed to send");
       }
     } catch (e) {
       toast?.(friendlyError(e, "Update failed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendShippingQuote = async () => {
+    if (!order) return;
+    const shippingRand = Number(quoteShipping);
+    if (!Number.isFinite(shippingRand) || shippingRand <= 0) {
+      toast?.("Enter a shipping amount greater than 0");
+      return;
+    }
+    setSaving(true);
+    try {
+      const subtotal = Number(order.subtotal) || 0;
+      const total = Math.round((subtotal + shippingRand) * 100) / 100;
+      const delivery = {
+        ...(order.delivery || {}),
+        quote_token: order.delivery?.quote_token || crypto.randomUUID().replace(/-/g, ""),
+      };
+      const updated = await db.updateOrder(order.id, {
+        status: "quote_sent",
+        shipping_cents: Math.round(shippingRand * 100),
+        total_cents: Math.round(total * 100),
+        delivery,
+      });
+      setOrder(updated);
+      setStatus(updated.status);
+      setQuoteShipping(String(updated.shipping || shippingRand));
+      toast?.(`Quote saved for ${updated.order_no}`);
+      onChanged?.();
+
+      const site = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin || "").replace(/\/$/, "");
+      const token = updated.delivery?.quote_token || delivery.quote_token;
+      const mail = await db.notifyOrderStatusEmail(
+        {
+          ...updated,
+          confirmUrl: `${site}/order/quote?token=${encodeURIComponent(token)}&action=confirm`,
+          declineUrl: `${site}/order/quote?token=${encodeURIComponent(token)}&action=decline`,
+        },
+        "quote_sent",
+      );
+      if (mail?.ok) toast?.("Customer emailed with shipping quote");
+      else if (mail?.error) toast?.("Quote saved, but the email failed to send");
+    } catch (e) {
+      toast?.(friendlyError(e, "Could not send quote"));
     } finally {
       setSaving(false);
     }
@@ -262,7 +330,7 @@ function AdminOrderModal({ orderId, onClose, onChanged, toast }) {
                       style={{ border: `1px solid ${C.line}`, borderRadius: 4, fontFamily: HEAD, height: 42, boxSizing: "border-box" }}
                     >
                       {ORDER_STATUSES.map((s) => (
-                        <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>
+                        <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>
                       ))}
                     </select>
                   </label>
@@ -277,6 +345,39 @@ function AdminOrderModal({ orderId, onClose, onChanged, toast }) {
                     />
                   </label>
                 </div>
+                {isInternational && (
+                  <div className="pt-2 space-y-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                    <div className="text-[11px] tracking-[.08em] text-neutral-500" style={{ fontFamily: HEAD }}>
+                      INTERNATIONAL SHIPPING QUOTE
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+                      <label className="block flex-1">
+                        <span className="block text-[11px] tracking-[.08em] text-neutral-500 mb-1.5" style={{ fontFamily: HEAD }}>
+                          SHIPPING AMOUNT (ZAR)
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={quoteShipping}
+                          onChange={(e) => setQuoteShipping(e.target.value)}
+                          placeholder="e.g. 850"
+                          className="w-full px-3 text-[14px] outline-none bg-white"
+                          style={{ border: `1px solid ${C.line}`, borderRadius: 4, height: 42, boxSizing: "border-box" }}
+                        />
+                      </label>
+                      <Pill
+                        onClick={sendShippingQuote}
+                        style={{ opacity: saving ? 0.6 : 1, pointerEvents: saving ? "none" : "auto", height: 42 }}
+                      >
+                        {saving ? "Sending…" : "Email quote to customer"}
+                      </Pill>
+                    </div>
+                    <p className="text-[12px] text-neutral-500 leading-relaxed">
+                      Customer receives confirm / decline links. If they accept, they return to checkout with this shipping amount.
+                    </p>
+                  </div>
+                )}
                 <p className="text-[12px] text-neutral-500 leading-relaxed">
                   Saving a new status will email the customer when transactional mail is connected (Resend).
                 </p>

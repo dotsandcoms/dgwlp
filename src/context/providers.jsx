@@ -38,12 +38,13 @@ function CartProvider({ children }) {
   const remove = (key) => setItems((c) => c.filter((i) => i.key !== key));
   const setQty = (key, d) => setItems((c) => c.map((i) => i.key === key ? { ...i, qty: Math.max(1, i.qty + d) } : i));
   const clear = () => setItems([]);
+  const replace = (next) => setItems(Array.isArray(next) ? next : []);
   // Avoid hydration mismatch: server always 0 until client has read localStorage
   const count = ready ? items.reduce((n, i) => n + i.qty, 0) : 0;
   const subtotal = items.reduce((n, i) => n + i.price * i.qty, 0);
 
   return (
-    <CartCtx.Provider value={{ items: ready ? items : [], add, remove, setQty, clear, count, subtotal, open, setOpen, ready }}>
+    <CartCtx.Provider value={{ items: ready ? items : [], add, remove, setQty, clear, replace, count, subtotal, open, setOpen, ready }}>
       {children}
     </CartCtx.Provider>
   );

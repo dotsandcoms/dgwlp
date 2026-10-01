@@ -401,14 +401,17 @@ export async function fetchOrderDetail(id) {
 }
 
 /**
- * Update order status / tracking. Returns the updated row.
+ * Update order status / tracking / shipping quote. Returns the updated row.
  * Caller should fire status emails via notifyOrderStatusEmail.
  */
-export async function updateOrder(id, { status, tracking_no } = {}) {
+export async function updateOrder(id, { status, tracking_no, shipping_cents, total_cents, delivery } = {}) {
   const sb = browserClient();
   const patch = {};
   if (status != null) patch.status = status;
   if (tracking_no !== undefined) patch.tracking_no = tracking_no ? String(tracking_no).trim() : null;
+  if (shipping_cents != null) patch.shipping_cents = Math.round(Number(shipping_cents) || 0);
+  if (total_cents != null) patch.total_cents = Math.round(Number(total_cents) || 0);
+  if (delivery != null) patch.delivery = delivery;
   if (!Object.keys(patch).length) return null;
 
   const { data, error } = await sb

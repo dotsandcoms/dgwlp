@@ -80,12 +80,43 @@ export const STATUS_COPY = {
     intro: (id) => `A refund for order <strong style="color:${BRAND.ink}">${id}</strong> has been processed.`,
     footer: "Allow a few business days for it to appear on your statement.",
   },
+  awaiting_quote: {
+    eyebrow: "WAITING ON SHIPPING QUOTE",
+    title: "We've received your international order",
+    subject: (id) => `Waiting on shipping quote — ${id}`,
+    intro: (id) => `Thank you — order <strong style="color:${BRAND.ink}">${id}</strong> is with us. We're preparing an international shipping quote and will email you shortly.`,
+    footer: "No payment is due until you accept the shipping quote.",
+  },
+  quote_sent: {
+    eyebrow: "SHIPPING QUOTE READY",
+    title: "Your international shipping quote",
+    subject: (id) => `Shipping quote ready — ${id}`,
+    intro: (id) => `Your shipping quote for order <strong style="color:${BRAND.ink}">${id}</strong> is ready. Please confirm you're happy to proceed, or decline to cancel.`,
+    footer: "Accepting takes you back to checkout with shipping included so you can pay securely.",
+  },
 };
 
 export function resolveEmailType(raw) {
   const t = String(raw || "receipt").toLowerCase();
   if (STATUS_COPY[t]) return t;
   return "receipt";
+}
+
+function actionButtonsHtml(order) {
+  const confirmUrl = scrubText(String(order?.confirmUrl || ""), 500);
+  const declineUrl = scrubText(String(order?.declineUrl || ""), 500);
+  if (!confirmUrl && !declineUrl) return "";
+  const confirm = confirmUrl
+    ? `<td style="padding-right:10px;">
+        <a href="${escapeHtml(confirmUrl)}" style="display:inline-block;padding:12px 20px;background:${BRAND.green};color:${BRAND.white};text-decoration:none;font-family:Jost,Poppins,Arial,sans-serif;font-size:12px;letter-spacing:0.12em;border-radius:4px;">ACCEPT &amp; PAY</a>
+      </td>`
+    : "";
+  const decline = declineUrl
+    ? `<td>
+        <a href="${escapeHtml(declineUrl)}" style="display:inline-block;padding:12px 20px;border:1px solid ${BRAND.line};color:${BRAND.ink};text-decoration:none;font-family:Jost,Poppins,Arial,sans-serif;font-size:12px;letter-spacing:0.12em;border-radius:4px;">DECLINE</a>
+      </td>`
+    : "";
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:28px;"><tr>${confirm}${decline}</tr></table>`;
 }
 
 function escapeHtml(s) {
@@ -353,6 +384,7 @@ export function buildOrderEmailHtml({ type, order }) {
                 ${escapeHtml(copy.footer)}
               </p>
 
+              ${actionButtonsHtml(order) || `
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:28px;">
                 <tr>
                   <td style="background:${BRAND.green};border-radius:4px;">
@@ -361,7 +393,7 @@ export function buildOrderEmailHtml({ type, order }) {
                     </a>
                   </td>
                 </tr>
-              </table>
+              </table>`}
             </td>
           </tr>
           <!-- Footer -->
@@ -559,16 +591,28 @@ export async function sendOrderStatusEmail({ type, order }) {
   const subject = STATUS_COPY[resolved].subject(orderId);
   const html = buildOrderEmailHtml({ type: resolved, order });
 
-  const ordersBcc = (
+  const parseEmailList = (raw) =>
+    String(raw || "")
+      .split(/[,;\s]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(looksLikeEmail);
+
+  const shop = parseEmailList(
     process.env.ORDERS_BCC ||
-    process.env.ORDERS_TO ||
-    from.match(/<([^>]+)>/)?.[1] ||
-    "orders@dgwlp.co.za"
-  ).trim().toLowerCase();
+      process.env.ORDERS_TO ||
+      from.match(/<([^>]+)>/)?.[1] ||
+      "orders@dgwlp.co.za",
+  );
+  // Default printer BCC; set PRINTERS_BCC="" to disable, or comma-list to override.
+  const printers =
+    process.env.PRINTERS_BCC === undefined
+      ? parseEmailList("chrisdw@candggroup.co.za")
+      : parseEmailList(process.env.PRINTERS_BCC);
+
+  const toLower = email.toLowerCase();
+  const bcc = [...new Set([...shop, ...printers])].filter((e) => e !== toLower);
   const payload = { from, to: email, subject, html };
-  if (looksLikeEmail(ordersBcc) && ordersBcc !== email.toLowerCase()) {
-    payload.bcc = [ordersBcc];
-  }
+  if (bcc.length) payload.bcc = bcc;
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",

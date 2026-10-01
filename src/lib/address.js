@@ -10,6 +10,19 @@ export function matchProvince(raw) {
   return hit || PROVINCES[0];
 }
 
+/** True when a country name / ISO code refers to South Africa. */
+export function isSouthAfrica(country) {
+  const n = String(country || "").trim().toLowerCase();
+  if (!n) return false;
+  return (
+    n === "za" ||
+    n === "zaf" ||
+    n === "south africa" ||
+    n === "republic of south africa" ||
+    n.includes("south africa")
+  );
+}
+
 /**
  * Parse Google Places address_components into our form shape.
  * @param {google.maps.GeocoderAddressComponent[]} components
@@ -19,6 +32,13 @@ export function parseGoogleAddress(components = []) {
     for (const t of types) {
       const c = components.find((x) => x.types.includes(t));
       if (c) return c.long_name;
+    }
+    return "";
+  };
+  const getShort = (...types) => {
+    for (const t of types) {
+      const c = components.find((x) => x.types.includes(t));
+      if (c) return c.short_name;
     }
     return "";
   };
@@ -35,10 +55,23 @@ export function parseGoogleAddress(components = []) {
   const city =
     get("locality", "postal_town", "administrative_area_level_2") || "";
 
-  const province = matchProvince(get("administrative_area_level_1"));
+  const countryLong = get("country") || "";
+  const countryCode = getShort("country") || "";
+  const provinceRaw = get("administrative_area_level_1");
+  const province = isSouthAfrica(countryLong || countryCode)
+    ? matchProvince(provinceRaw)
+    : (provinceRaw || "");
   const postal = get("postal_code") || "";
 
-  return { street, suburb, city, province, postal };
+  return {
+    street,
+    suburb,
+    city,
+    province,
+    postal,
+    country: countryLong || countryCode || "",
+    countryCode: countryCode || "",
+  };
 }
 
 /** Shape for Supabase `addresses` insert (maps `postal` → `postal_code`). */

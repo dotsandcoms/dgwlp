@@ -4,7 +4,7 @@ Supabase Edge Function that sends branded Doron Goldstein Photography order emai
 
 ## Templates
 
-`receipt` · `pending` · `paid` · `shipping` · `shipped` · `delivered` · `cancelled` · `refunded`
+`receipt` · `pending` · `paid` · `shipping` · `shipped` · `delivered` · `cancelled` · `refunded` · `awaiting_quote` · `quote_sent`
 
 ## Invoke
 
@@ -36,11 +36,14 @@ supabase secrets set \
   RESEND_API_KEY=re_… \
   EMAIL_FROM="Doron Goldstein Photography <orders@dgwlp.co.za>" \
   ORDERS_BCC=orders@dgwlp.co.za \
+  PRINTERS_BCC=chrisdw@candggroup.co.za \
   SITE_URL=https://your-domain
 ```
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically.
-Order emails are BCC'd to `ORDERS_BCC` (default `orders@dgwlp.co.za`) so the shop inbox always gets a copy.
+Order emails are BCC'd to the shop (`ORDERS_BCC`, default `orders@dgwlp.co.za`) and the printer
+(`PRINTERS_BCC`, default `chrisdw@candggroup.co.za`). Both accept comma-separated lists.
+Set `PRINTERS_BCC=` (empty) to disable the printer copy.
 
 ## Deploy
 

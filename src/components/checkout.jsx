@@ -12,28 +12,31 @@ import { emptyAddress } from "@/lib/address";
 import {
   DEFAULT_SETTINGS,
   orderTotals,
-  shippingCost,
   internationalShippingNote,
   framedCartItems,
 } from "@/lib/settings";
 import { useDisplayCurrency } from "@/lib/use-public-settings";
 import { useCart, useAuth, useToast } from "@/context/providers";
 import { friendlyError } from "@/lib/errors";
-import { placeOrder } from "@/lib/orders";
+import { placeOrder, newQuoteToken } from "@/lib/orders";
 
-function quoteContactHref(addr, items) {
-  const subject = encodeURIComponent("International shipping quote");
-  const lines = [
-    "Please quote international shipping for my order:",
-    "",
-    ...(items || []).map((i) => `- ${i.name} (${i.summary}) × ${i.qty}`),
-    "",
-    addr?.country ? `Country: ${addr.country}` : "",
-    addr?.city ? `City: ${addr.city}` : "",
-    addr?.street ? `Address: ${addr.street}` : "",
-  ].filter(Boolean);
-  const body = encodeURIComponent(lines.join("\n"));
-  return `/contact?subject=${subject}&body=${body}`;
+const QUOTED_CHECKOUT_KEY = "dg_quoted_checkout";
+
+export function loadQuotedCheckout() {
+  try {
+    const raw = localStorage.getItem(QUOTED_CHECKOUT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveQuotedCheckout(payload) {
+  try { localStorage.setItem(QUOTED_CHECKOUT_KEY, JSON.stringify(payload)); } catch {}
+}
+
+export function clearQuotedCheckout() {
+  try { localStorage.removeItem(QUOTED_CHECKOUT_KEY); } catch {}
 }
 
 export function CheckoutFlow() {
@@ -49,6 +52,8 @@ export function CheckoutFlow() {
   const [pay, setPay] = useState("payfast");
   const [addr, setAddr] = useState(null);
   const [destination, setDestination] = useState("za");
+  const [quotedCheckout, setQuotedCheckout] = useState(null);
+  const [placing, setPlacing] = useState(false);
   const [storeSettings, setStoreSettings] = useState({
     shipping: DEFAULT_SETTINGS.shipping,
     tax: DEFAULT_SETTINGS.tax,
@@ -73,11 +78,48 @@ export function CheckoutFlow() {
     return () => { cancelled = true; };
   }, []);
 
+  // Resume international checkout after customer accepts a shipping quote.
+  useEffect(() => {
+    const quoted = loadQuotedCheckout();
+    if (!quoted?.orderNo || !Array.isArray(quoted.items) || !quoted.items.length) return;
+    setQuotedCheckout(quoted);
+    setDestination("international");
+    setAddr(quoted.delivery || null);
+    setShip("international");
+    if (user) setStep(3);
+    const nextItems = quoted.items.map((item) => ({
+      ...item,
+      key: item.key || Math.random().toString(36).slice(2),
+      product: item.product || {
+        name: item.name,
+        image: item.image || null,
+        colour: item.printColour || "bw",
+        grad: ["#2f2f2d", "#a9a49b"],
+        angle: 120,
+      },
+    }));
+    cart.replace(nextItems);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount for quote resume
+  }, [user]);
+
   const international = destination === "international";
-  const totals = useMemo(
-    () => orderTotals(storeSettings, { subtotal: cart.subtotal, method: ship, international }),
-    [storeSettings, cart.subtotal, ship, international]
-  );
+  const quotedShipping = quotedCheckout ? Number(quotedCheckout.shipping) || 0 : null;
+  const totals = useMemo(() => {
+    if (quotedShipping != null) {
+      const tax = 0;
+      const subtotal = cart.subtotal;
+      return {
+        subtotal,
+        shipping: quotedShipping,
+        shippingQuoted: false,
+        tax,
+        total: Math.round((subtotal + quotedShipping) * 100) / 100,
+        taxLabel: storeSettings.tax?.label || "VAT",
+        taxEnabled: false,
+      };
+    }
+    return orderTotals(storeSettings, { subtotal: cart.subtotal, method: ship, international });
+  }, [storeSettings, cart.subtotal, ship, international, quotedShipping]);
   const { shipping: shipCost, tax: taxCost, total, taxLabel, taxEnabled, shippingQuoted } = totals;
   const steps = ["Account", "Delivery", "Payment"];
 
@@ -102,17 +144,13 @@ export function CheckoutFlow() {
     }
   };
 
-  const place = async () => {
-    if (international) {
-      toast("International shipping is quoted — use Request a quote");
-      setStep(2);
-      return;
-    }
+  const placeLocal = async () => {
     if (!user?.email) {
       toast("Please sign in to place an order");
       setStep(1);
       return;
     }
+    setPlacing(true);
     try {
       await saveDeliveryToProfile(addr);
       const result = await placeOrder({
@@ -124,7 +162,8 @@ export function CheckoutFlow() {
         total,
         delivery: { ...(addr || {}), destination: "za", name: user.name || "", phone: user.phone || "" },
         pay,
-        shipMethod: ship,
+        shipMethod: "standard",
+        status: "pending",
       });
       const order = {
         ...result.order,
@@ -138,12 +177,118 @@ export function CheckoutFlow() {
         await sendOrderStatusEmailClient(order, "receipt");
       } catch {}
       cart.clear();
+      clearQuotedCheckout();
       toast(result.localOnly ? "Order placed (demo mode)" : "Order placed — thank you!");
       router.push("/order/success");
     } catch (e) {
       toast(friendlyError(e, "Could not place order"));
+    } finally {
+      setPlacing(false);
     }
   };
+
+  /** Pay an international order after the customer accepted the shipping quote. */
+  const placeQuoted = async () => {
+    if (!user?.email) {
+      toast("Please sign in to place an order");
+      setStep(1);
+      return;
+    }
+    if (!quotedCheckout?.token) {
+      toast("Shipping quote missing — open the link from your email again");
+      return;
+    }
+    setPlacing(true);
+    try {
+      const res = await fetch("/api/order/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: quotedCheckout.token,
+          action: "pay",
+          payment_provider: pay,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not confirm payment order");
+
+      const order = {
+        ...(data.order || {}),
+        email: user.email,
+        tax: 0,
+        taxLabel,
+      };
+      try { localStorage.setItem("dg_last_order", JSON.stringify(order)); } catch {}
+      try {
+        const { sendOrderStatusEmailClient } = await import("@/lib/emails");
+        await sendOrderStatusEmailClient(order, "receipt");
+      } catch {}
+      cart.clear();
+      clearQuotedCheckout();
+      setQuotedCheckout(null);
+      toast("Order confirmed — thank you!");
+      router.push("/order/success");
+    } catch (e) {
+      toast(friendlyError(e, "Could not place order"));
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const placeInternationalQuoteRequest = async (delivery) => {
+    if (!user?.email) {
+      toast("Please sign in to place an order");
+      setStep(1);
+      return;
+    }
+    const framed = framedCartItems(cart.items);
+    if (storeSettings.shipping?.internationalUnframedOnly && framed.length) {
+      toast("Remove framed items before requesting an international quote");
+      return;
+    }
+    setPlacing(true);
+    try {
+      const quoteToken = newQuoteToken();
+      const deliveryPayload = {
+        ...(delivery || {}),
+        destination: "international",
+        name: user.name || "",
+        phone: user.phone || "",
+        quote_token: quoteToken,
+      };
+      const result = await placeOrder({
+        user,
+        email: user.email,
+        items: cart.items,
+        subtotal: cart.subtotal,
+        shipping: 0,
+        total: cart.subtotal,
+        delivery: deliveryPayload,
+        pay: null,
+        shipMethod: "international",
+        status: "awaiting_quote",
+      });
+      const order = {
+        ...result.order,
+        email: user.email,
+        quoteToken,
+      };
+      try { localStorage.setItem("dg_last_order", JSON.stringify(order)); } catch {}
+      try {
+        const { sendOrderStatusEmailClient } = await import("@/lib/emails");
+        await sendOrderStatusEmailClient(order, "awaiting_quote");
+      } catch {}
+      cart.clear();
+      toast("Order submitted — we'll email your shipping quote shortly");
+      router.push("/order/success?quote=1");
+    } catch (e) {
+      toast(friendlyError(e, "Could not submit quote request"));
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const place = () => (quotedCheckout ? placeQuoted() : placeLocal());
 
   if (cart.items.length === 0) return (
     <div className="max-w-[600px] mx-auto px-5 py-24 text-center">
@@ -210,17 +355,27 @@ export function CheckoutFlow() {
               cartItems={cart.items}
               destination={destination}
               setDestination={setDestination}
+              placing={placing}
               onBack={() => setStep(user ? 2 : 1)}
               onNext={async (delivery) => {
                 setAddr(delivery);
                 await saveDeliveryToProfile(delivery);
                 setStep(3);
               }}
+              onRequestQuote={placeInternationalQuoteRequest}
             />
           )}
 
-          {step === 3 && !international && (
+          {step === 3 && (!international || quotedCheckout) && (
             <div>
+              {quotedCheckout && (
+                <div className="mb-5 p-4 rounded" style={{ background: C.greenSoft, border: `1px solid ${C.line}` }}>
+                  <div className="text-[12px] tracking-[.1em]" style={{ fontFamily: HEAD, color: C.green }}>SHIPPING QUOTE ACCEPTED</div>
+                  <p className="text-[13px] text-neutral-700 mt-1">
+                    Order {quotedCheckout.orderNo} — international shipping {zar(quotedShipping)} is included below. Complete payment to confirm.
+                  </p>
+                </div>
+              )}
               <h3 className="text-[14px] tracking-[.1em] mb-4" style={{ fontFamily: HEAD }}>PAYMENT METHOD</h3>
               {[["payfast", "PayFast", "Cards · Instant EFT · SnapScan"], ["paystack", "Paystack", "Cards & bank transfer"]].map(([id, n, d]) => (
                 <label key={id} className="flex items-center gap-3 p-3 mb-2 cursor-pointer" style={{ border: `1px solid ${pay === id ? C.green : C.line}`, borderRadius: 4 }}>
@@ -232,14 +387,26 @@ export function CheckoutFlow() {
               {addr && (
                 <div className="mt-6 p-4 rounded" style={{ background: "#faf9f6", border: `1px solid ${C.line}` }}>
                   <div className="text-[12px] tracking-[.08em] text-neutral-500 mb-1" style={{ fontFamily: HEAD }}>DELIVERING TO</div>
-                  <div className="text-[13px] text-neutral-700">{addr.street}, {addr.suburb ? addr.suburb + ", " : ""}{addr.city}, {addr.province}, {addr.postal}</div>
+                  <div className="text-[13px] text-neutral-700">
+                    {addr.street}{addr.suburb ? `, ${addr.suburb}` : ""}{addr.city ? `, ${addr.city}` : ""}
+                    {addr.province ? `, ${addr.province}` : ""}{addr.country ? `, ${addr.country}` : ""}{addr.postal ? `, ${addr.postal}` : ""}
+                  </div>
                   {addr.notes && <div className="text-[12px] text-neutral-500 mt-1">{addr.notes}</div>}
-                  <button onClick={() => setStep(2)} className="text-[12px] mt-1" style={{ color: C.green }}>Edit</button>
+                  {!quotedCheckout && (
+                    <button onClick={() => setStep(2)} className="text-[12px] mt-1" style={{ color: C.green }}>Edit</button>
+                  )}
                 </div>
               )}
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 mt-6">
-                <button onClick={() => setStep(2)} className="text-[13px] text-neutral-500 text-center sm:text-left">← Delivery</button>
-                <Pill onClick={place} style={{ width: "100%", maxWidth: 360 }}>Pay {zar(total)} with {pay === "payfast" ? "PayFast" : "Paystack"}</Pill>
+                {!quotedCheckout ? (
+                  <button onClick={() => setStep(2)} className="text-[13px] text-neutral-500 text-center sm:text-left">← Delivery</button>
+                ) : <span />}
+                <Pill
+                  onClick={place}
+                  style={{ width: "100%", maxWidth: 360, opacity: placing ? 0.6 : 1, pointerEvents: placing ? "none" : "auto" }}
+                >
+                  {placing ? "Please wait…" : `Pay ${zar(total)} with ${pay === "payfast" ? "PayFast" : "Paystack"}`}
+                </Pill>
               </div>
               <p className="text-[11px] text-neutral-500 mt-3 flex items-center gap-1"><ShieldCheck size={13} /> You'll be redirected to complete payment securely.</p>
             </div>
@@ -260,11 +427,26 @@ export function CheckoutFlow() {
           ))}
           <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
             <Row l="Subtotal" v={money(cart.subtotal)} />
-            <Row l="Shipping" v={step >= 2 ? (shippingQuoted ? "Quoted" : (shipCost === 0 ? "Free" : money(shipCost))) : "—"} />
-            {taxEnabled && step >= 2 && !shippingQuoted && <Row l={`${taxLabel} (${storeSettings.tax.ratePct}%)`} v={money(taxCost)} />}
+            <Row
+              l="Shipping"
+              v={
+                step >= 2
+                  ? (quotedCheckout
+                    ? money(quotedShipping)
+                    : (shippingQuoted ? "Quoted on request" : (shipCost === 0 ? "Free" : money(shipCost))))
+                  : "—"
+              }
+            />
+            {taxEnabled && step >= 2 && !shippingQuoted && quotedCheckout == null && (
+              <Row l={`${taxLabel} (${storeSettings.tax.ratePct}%)`} v={money(taxCost)} />
+            )}
             <div className="mt-2" />
-            <Row l="Total" v={shippingQuoted ? `${money(cart.subtotal)} + shipping` : money(step >= 2 ? total : cart.subtotal)} bold />
-            {isForeign && step >= 2 && !shippingQuoted && (
+            <Row
+              l="Total"
+              v={shippingQuoted && !quotedCheckout ? `${money(cart.subtotal)} + shipping` : money(step >= 2 ? total : cart.subtotal)}
+              bold
+            />
+            {isForeign && step >= 2 && (!shippingQuoted || quotedCheckout) && (
               <p className="text-[11px] text-neutral-500 mt-2">
                 Approximate {code}. You&apos;ll be charged {zar(total)}.
               </p>
@@ -288,6 +470,8 @@ function DeliveryStep({
   setDestination,
   onBack,
   onNext,
+  onRequestQuote,
+  placing,
 }) {
   const international = destination === "international";
   const [f, setF] = useState(() => ({
@@ -310,13 +494,17 @@ function DeliveryStep({
     ? Boolean(f.street && f.city && f.country && !framedBlocked)
     : Boolean(f.street && f.city && f.postal);
 
-  const standardCost = shippingCost(shippingCfg, "standard", subtotal);
-  const expressCost = shippingCost(shippingCfg, "express", subtotal);
   const note = internationalShippingNote(shippingCfg);
 
   const chooseDestination = (id) => {
     setDestination(id);
+    setShip("standard");
     setF((prev) => ({ ...prev, destination: id }));
+  };
+
+  const onDestinationHint = (hint) => {
+    if (hint === destination) return;
+    chooseDestination(hint);
   };
 
   return (
@@ -324,8 +512,8 @@ function DeliveryStep({
       <h3 className="text-[14px] tracking-[.1em] mb-3" style={{ fontFamily: HEAD }}>DESTINATION</h3>
       <div className="grid sm:grid-cols-2 gap-2 mb-6">
         {[
-          ["za", "South Africa", "Courier rates at checkout"],
-          ["international", "International", "Shipping quoted on request"],
+          ["za", "South Africa", "Free shipping nationwide"],
+          ["international", "International", "Quoted before payment"],
         ].map(([id, title, hint]) => (
           <button
             key={id}
@@ -348,6 +536,7 @@ function DeliveryStep({
         value={f}
         onChange={setF}
         international={international}
+        onDestinationHint={onDestinationHint}
         notesPlaceholder={international ? "Anything we should know for the quote (optional)" : "Delivery notes (optional)"}
       />
 
@@ -357,7 +546,9 @@ function DeliveryStep({
             <Truck size={17} color={C.green} className="mt-0.5 shrink-0" />
             <div>
               <div className="text-[14px]" style={{ fontFamily: HEAD }}>International shipping</div>
-              <p className="text-[13px] text-neutral-600 mt-1">{note}</p>
+              <p className="text-[13px] text-neutral-600 mt-1">
+                {note || "Submit your order and we'll email a shipping quote. You can confirm or decline before paying."}
+              </p>
               {shippingCfg.internationalUnframedOnly && (
                 <p className="text-[12px] text-neutral-500 mt-2">Overseas orders are unframed prints only.</p>
               )}
@@ -376,35 +567,39 @@ function DeliveryStep({
         </div>
       ) : (
         <>
-          <h3 className="text-[14px] tracking-[.1em] mt-8 mb-3" style={{ fontFamily: HEAD }}>SHIPPING METHOD</h3>
-          {[
-            ["standard", "Standard courier", "2–4 working days", standardCost],
-            ["express", "Express courier", "1–2 working days", expressCost],
-          ].map(([id, n, d, cost]) => (
-            <label key={id} className="flex items-center justify-between p-3 mb-2 cursor-pointer" style={{ border: `1px solid ${ship === id ? C.green : C.line}`, borderRadius: 4 }}>
-              <div className="flex items-center gap-3"><input type="radio" checked={ship === id} onChange={() => setShip(id)} /><Truck size={17} color={C.green} /><div><div className="text-[14px]" style={{ fontFamily: HEAD }}>{n}</div><div className="text-[12px] text-neutral-500">{d}</div></div></div>
-              <span className="text-[14px]" style={{ fontFamily: HEAD }}>{cost === 0 ? "Free" : zar(cost)}</span>
-            </label>
-          ))}
+          <h3 className="text-[14px] tracking-[.1em] mt-8 mb-3" style={{ fontFamily: HEAD }}>SHIPPING</h3>
+          <div
+            className="flex items-center justify-between p-3 mb-2"
+            style={{ border: `1px solid ${C.green}`, borderRadius: 4, background: C.greenSoft }}
+          >
+            <div className="flex items-center gap-3">
+              <Truck size={17} color={C.green} />
+              <div>
+                <div className="text-[14px]" style={{ fontFamily: HEAD }}>Free shipping</div>
+                <div className="text-[12px] text-neutral-600">
+                  Delivered within 14 days from order date and payment processed
+                </div>
+              </div>
+            </div>
+            <span className="text-[14px]" style={{ fontFamily: HEAD }}>Free</span>
+          </div>
         </>
       )}
 
       <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 mt-6">
         <button type="button" onClick={onBack} className="text-[13px] text-neutral-500 text-center sm:text-left">← Account</button>
         {international ? (
-          <Link
-            href={ready ? quoteContactHref({ ...f, destination: "international" }, cartItems) : "#"}
-            onClick={(e) => {
-              if (!ready) {
-                e.preventDefault();
-                return;
-              }
-              setAddr({ ...f, destination: "international" });
+          <Pill
+            onClick={() => {
+              if (!ready || placing) return;
+              const delivery = { ...f, destination: "international" };
+              setAddr(delivery);
+              onRequestQuote?.(delivery);
             }}
-            style={{ pointerEvents: ready ? "auto" : "none", opacity: ready ? 1 : 0.5 }}
+            style={{ opacity: ready && !placing ? 1 : 0.5, pointerEvents: ready && !placing ? "auto" : "none", width: "100%", maxWidth: 360 }}
           >
-            <Pill style={{ width: "100%", maxWidth: 360 }}>Request a shipping quote →</Pill>
-          </Link>
+            {placing ? "Submitting…" : "Request shipping quote →"}
+          </Pill>
         ) : (
           <Pill
             onClick={() => { if (ready) { setAddr({ ...f, destination: "za" }); onNext({ ...f, destination: "za" }); } }}
@@ -429,7 +624,16 @@ function orderHeroImage(items) {
 export function Confirmation() {
   const router = useRouter();
   const [order, setOrder] = useState(null);
-  useEffect(() => { try { const s = localStorage.getItem("dg_last_order"); if (s) setOrder(JSON.parse(s)); } catch {} }, []);
+  const [awaitingQuote, setAwaitingQuote] = useState(false);
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem("dg_last_order");
+      if (s) setOrder(JSON.parse(s));
+    } catch {}
+    try {
+      setAwaitingQuote(new URLSearchParams(window.location.search).get("quote") === "1");
+    } catch {}
+  }, []);
 
   if (!order) {
     return (
@@ -472,6 +676,9 @@ export function Confirmation() {
   const city = order.delivery?.city;
   const itemCount = items.reduce((n, i) => n + (i.qty || 1), 0);
   const heroBg = orderHeroImage(items);
+  const isQuote = awaitingQuote
+    || order.rawStatus === "awaiting_quote"
+    || String(order.status || "").toLowerCase().includes("waiting on shipping");
 
   return (
     <div>
@@ -499,14 +706,16 @@ export function Confirmation() {
             className="text-white text-[36px] sm:text-[52px] leading-[0.95] font-light mb-4"
             style={{ fontFamily: HEAD, animation: "orderTitleIn .4s ease" }}
           >
-            Thank you
+            {isQuote ? "Quote requested" : "Thank you"}
           </h1>
           <p className="text-white/75 text-[15px] sm:text-[17px] max-w-[520px] leading-relaxed" style={{ fontFamily: HEAD, fontWeight: 300 }}>
-            Order {order.id} is confirmed.
-            {city ? ` We’ll deliver to ${city}.` : ""} A receipt is on its way to your inbox.
+            {isQuote
+              ? `Order ${order.id} is waiting on a shipping quote. We'll email you the amount to confirm before payment.`
+              : `Order ${order.id} is confirmed.${city ? ` We'll deliver to ${city}.` : ""} A receipt is on its way to your inbox.`}
           </p>
           <p className="mt-5 text-[13px] text-white/55" style={{ fontFamily: HEAD }}>
-            {itemCount} print{itemCount === 1 ? "" : "s"} · {zar(order.total)} paid
+            {itemCount} print{itemCount === 1 ? "" : "s"}
+            {isQuote ? ` · ${zar(order.subtotal || order.total)} + shipping` : ` · ${zar(order.total)} paid`}
           </p>
         </div>
         <style>{`
@@ -531,7 +740,9 @@ export function Confirmation() {
               <Check size={18} color={C.green} strokeWidth={2.25} />
             </div>
             <div>
-              <p className="text-[14px]" style={{ fontFamily: HEAD }}>Order confirmed</p>
+              <p className="text-[14px]" style={{ fontFamily: HEAD }}>
+                {isQuote ? "Waiting on shipping quote" : "Order confirmed"}
+              </p>
               <p className="text-[12px] text-neutral-500">We’ll email tracking once your print ships.</p>
             </div>
           </div>

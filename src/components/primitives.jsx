@@ -257,8 +257,19 @@ export function StatusBadge({ s }) {
     Delivered: C.green, Shipped: "#2563eb", Processing: "#b45309",
     pending: "#b45309", paid: C.green, shipped: "#2563eb", delivered: C.green,
     cancelled: "#dc2626", refunded: C.gray,
+    awaiting_quote: "#b45309",
+    quote_sent: "#2563eb",
+    quote_accepted: C.green,
+    "Waiting on shipping quote": "#b45309",
+    "Shipping quote sent": "#2563eb",
+    "Quote accepted — pay now": C.green,
+  };
+  const labels = {
+    awaiting_quote: "Waiting on shipping quote",
+    quote_sent: "Shipping quote sent",
+    quote_accepted: "Quote accepted — pay now",
   };
   const colour = map[s] || C.gray;
-  const label = /^[a-z]/.test(s || "") ? s[0].toUpperCase() + s.slice(1) : s;
+  const label = labels[s] || (/^[a-z]/.test(s || "") ? s[0].toUpperCase() + s.slice(1) : s);
   return <span className="text-[12px] px-2.5 py-1 rounded-full" style={{ background: `${colour}18`, color: colour, fontFamily: HEAD }}>{label}</span>;
 }

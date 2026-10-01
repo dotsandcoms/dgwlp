@@ -13,6 +13,8 @@
  * Secrets (Dashboard → Edge Functions → Secrets):
  *   RESEND_API_KEY
  *   EMAIL_FROM  (or RESEND_VERIFIED_SENDER)
+ *   ORDERS_BCC  (optional; default orders@dgwlp.co.za — comma-separated OK)
+ *   PRINTERS_BCC (optional; default chrisdw@candggroup.co.za; empty disables)
  *   SITE_URL    (optional; defaults to NEXT-style site)
  */
 
@@ -478,14 +480,35 @@ function resolveFromAddress() {
   return `Doron Goldstein Photography <noreply@${verified}>`;
 }
 
-/** Shop inbox that always BCC's order emails (customer still gets `to`). */
-function resolveOrdersInbox() {
-  const explicit = scrub(Deno.env.get("ORDERS_BCC") || Deno.env.get("ORDERS_TO") || "", 254);
-  if (looksLikeEmail(explicit)) return explicit.toLowerCase();
-  const from = resolveFromAddress();
-  const parsed = from.match(/<([^>]+)>/)?.[1] || "";
-  if (looksLikeEmail(parsed)) return parsed.toLowerCase();
-  return "orders@dgwlp.co.za";
+const DEFAULT_ORDERS_BCC = "orders@dgwlp.co.za";
+/** Printer / production inbox — always BCC'd on order emails unless overridden. */
+const DEFAULT_PRINTERS_BCC = "chrisdw@candggroup.co.za";
+
+/** Split comma/semicolon/whitespace-separated email lists from env secrets. */
+function parseEmailList(raw: string): string[] {
+  return String(raw || "")
+    .split(/[,;\s]+/)
+    .map((e) => scrub(e, 254).toLowerCase())
+    .filter(looksLikeEmail);
+}
+
+/** Shop + printer inboxes that always BCC order emails (customer still gets `to`). */
+function resolveOrdersBccList(): string[] {
+  const shopEnv = Deno.env.get("ORDERS_BCC") || Deno.env.get("ORDERS_TO") || "";
+  let shop = parseEmailList(shopEnv);
+  if (!shop.length) {
+    const from = resolveFromAddress();
+    const parsed = from.match(/<([^>]+)>/)?.[1] || "";
+    shop = looksLikeEmail(parsed) ? [parsed.toLowerCase()] : [DEFAULT_ORDERS_BCC];
+  }
+
+  const printerEnv = Deno.env.get("PRINTERS_BCC");
+  const printers =
+    printerEnv === undefined || printerEnv === null
+      ? parseEmailList(DEFAULT_PRINTERS_BCC)
+      : parseEmailList(printerEnv); // empty string disables printer BCC
+
+  return mergeBcc([], [...shop, ...printers]);
 }
 
 function mergeBcc(
@@ -567,9 +590,9 @@ serve(async (req: Request) => {
     let finalBcc = bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : undefined;
     finalTo = finalTo?.map((e) => scrub(e, 254)).filter(looksLikeEmail);
 
-    // Always BCC the shop inbox on order templates so admin sees every status email.
+    // Always BCC shop + printer inboxes on order templates (customer still on `to`).
     if (ORDER_TEMPLATES.has(resolvedTemplate)) {
-      finalBcc = mergeBcc(finalBcc, [resolveOrdersInbox()], finalTo || []);
+      finalBcc = mergeBcc(finalBcc, resolveOrdersBccList(), finalTo || []);
     } else {
       finalBcc = mergeBcc(finalBcc, [], finalTo || []);
     }

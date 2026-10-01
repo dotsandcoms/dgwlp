@@ -591,16 +591,28 @@ export async function sendOrderStatusEmail({ type, order }) {
   const subject = STATUS_COPY[resolved].subject(orderId);
   const html = buildOrderEmailHtml({ type: resolved, order });
 
-  const ordersBcc = (
+  const parseEmailList = (raw) =>
+    String(raw || "")
+      .split(/[,;\s]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(looksLikeEmail);
+
+  const shop = parseEmailList(
     process.env.ORDERS_BCC ||
-    process.env.ORDERS_TO ||
-    from.match(/<([^>]+)>/)?.[1] ||
-    "orders@dgwlp.co.za"
-  ).trim().toLowerCase();
+      process.env.ORDERS_TO ||
+      from.match(/<([^>]+)>/)?.[1] ||
+      "orders@dgwlp.co.za",
+  );
+  // Default printer BCC; set PRINTERS_BCC="" to disable, or comma-list to override.
+  const printers =
+    process.env.PRINTERS_BCC === undefined
+      ? parseEmailList("chrisdw@candggroup.co.za")
+      : parseEmailList(process.env.PRINTERS_BCC);
+
+  const toLower = email.toLowerCase();
+  const bcc = [...new Set([...shop, ...printers])].filter((e) => e !== toLower);
   const payload = { from, to: email, subject, html };
-  if (looksLikeEmail(ordersBcc) && ordersBcc !== email.toLowerCase()) {
-    payload.bcc = [ordersBcc];
-  }
+  if (bcc.length) payload.bcc = bcc;
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",

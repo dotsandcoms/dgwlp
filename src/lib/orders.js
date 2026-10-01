@@ -2,12 +2,26 @@ import { browserClient, hasSupabase, imageUrl } from "./supabase";
 
 const STATUS_LABEL = {
   pending: "Processing",
+  awaiting_quote: "Waiting on shipping quote",
+  quote_sent: "Shipping quote sent",
+  quote_accepted: "Quote accepted — pay now",
   paid: "Paid",
   shipped: "Shipped",
   delivered: "Delivered",
   cancelled: "Cancelled",
   refunded: "Refunded",
 };
+
+export function statusLabel(status) {
+  const key = String(status || "").toLowerCase();
+  return STATUS_LABEL[key] || status || "Processing";
+}
+
+/** Random token stored on delivery for international quote confirm/decline links. */
+export function newQuoteToken() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, "");
+  return `q${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+}
 
 /** Deterministic placeholder gradient when a product image is missing. */
 function gradFor(name = "") {
@@ -63,7 +77,18 @@ export async function enrichOrdersWithImages(sb, orders) {
  * Persist a checkout order + line items to Supabase.
  * Requires a signed-in session (RLS: auth.uid() = user_id).
  */
-export async function placeOrder({ user, email, items, subtotal, shipping, total, delivery, pay, shipMethod }) {
+export async function placeOrder({
+  user,
+  email,
+  items,
+  subtotal,
+  shipping,
+  total,
+  delivery,
+  pay,
+  shipMethod,
+  status = "pending",
+}) {
   if (!hasSupabase) {
     return {
       ok: true,
@@ -77,7 +102,8 @@ export async function placeOrder({ user, email, items, subtotal, shipping, total
         delivery,
         pay,
         email,
-        status: "Processing",
+        status: statusLabel(status),
+        rawStatus: status,
         date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
       },
     };
@@ -93,7 +119,7 @@ export async function placeOrder({ user, email, items, subtotal, shipping, total
     .insert({
       user_id: authUser.id,
       email: email || authUser.email || user?.email || "",
-      status: "pending",
+      status: status || "pending",
       subtotal_cents: Math.round((subtotal || 0) * 100),
       shipping_cents: Math.round((shipping || 0) * 100),
       total_cents: Math.round((total || 0) * 100),
@@ -200,6 +226,7 @@ function mapDbOrder(row, cartItems) {
     shipping: row.shipping_cents != null ? row.shipping_cents / 100 : 0,
     total: row.total_cents != null ? row.total_cents / 100 : 0,
     status: STATUS_LABEL[row.status] || row.status || "Processing",
+    rawStatus: row.status || "pending",
     pay,
     tracking: row.tracking_no || null,
     delivery: row.delivery || null,

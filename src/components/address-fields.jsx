@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { ChevronDown, MapPin } from "lucide-react";
 import { C, HEAD, PROVINCES } from "@/lib/pricing";
 import { loadGoogleMaps, mapsKey } from "@/lib/google-maps";
-import { parseGoogleAddress, emptyAddress } from "@/lib/address";
+import { parseGoogleAddress, emptyAddress, isSouthAfrica } from "@/lib/address";
 
 const inp = {
   className: "w-full py-3.5 px-4 text-[14px] outline-none bg-white",
@@ -12,8 +12,7 @@ const inp = {
 
 /**
  * Delivery address fields with Google Places autocomplete on the street line.
- * Autofills suburb, city, province and postal when a suggestion is chosen.
- * Pass international to collect a country and skip SA province / Places ZA filter.
+ * Worldwide Places — when a suggestion is chosen outside South Africa, onDestinationHint("international") fires.
  */
 export function AddressFields({
   value,
@@ -21,20 +20,29 @@ export function AddressFields({
   showNotes = true,
   notesPlaceholder = "Delivery notes (optional — gate code, etc.)",
   international = false,
+  onDestinationHint,
 }) {
   const f = value || emptyAddress();
   const streetRef = useRef(null);
   const acRef = useRef(null);
   const onChangeRef = useRef(onChange);
+  const onHintRef = useRef(onDestinationHint);
   const valueRef = useRef(f);
   const [mapsReady, setMapsReady] = useState(false);
   const [mapsError, setMapsError] = useState("");
 
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  useEffect(() => { onHintRef.current = onDestinationHint; }, [onDestinationHint]);
   useEffect(() => { valueRef.current = f; }, [f]);
 
   const patch = (partial) => onChange({ ...f, ...partial });
-  const set = (k) => (e) => patch({ [k]: e.target.value });
+  const set = (k) => (e) => {
+    const next = { ...f, [k]: e.target.value };
+    onChange(next);
+    if (k === "country" && e.target.value) {
+      onHintRef.current?.(isSouthAfrica(e.target.value) ? "za" : "international");
+    }
+  };
 
   const detach = useCallback(() => {
     if (acRef.current && window.google?.maps?.event) {
@@ -44,10 +52,10 @@ export function AddressFields({
   }, []);
 
   const attach = useCallback((input, google) => {
-    if (!input || !google?.maps?.places || international) return;
+    if (!input || !google?.maps?.places) return;
     detach();
+    // No country restriction — used to detect SA vs international automatically.
     const ac = new google.maps.places.Autocomplete(input, {
-      componentRestrictions: { country: "za" },
       fields: ["address_components", "formatted_address", "name"],
       types: ["address"],
     });
@@ -56,20 +64,25 @@ export function AddressFields({
       if (!place?.address_components?.length) return;
       const parsed = parseGoogleAddress(place.address_components);
       if (!parsed.street && place.name) parsed.street = place.name;
+      const za = isSouthAfrica(parsed.country || parsed.countryCode);
       const next = {
         ...valueRef.current,
         ...parsed,
         street: parsed.street || valueRef.current.street,
+        destination: za ? "za" : "international",
+        // Clear SA-only province when going international
+        province: za ? (parsed.province || valueRef.current.province) : (parsed.province || ""),
       };
       onChangeRef.current(next);
+      onHintRef.current?.(za ? "za" : "international");
     });
     acRef.current = ac;
     setMapsReady(true);
     setMapsError("");
-  }, [detach, international]);
+  }, [detach]);
 
   useEffect(() => {
-    if (international || !mapsKey()) {
+    if (!mapsKey()) {
       detach();
       setMapsReady(false);
       setMapsError("");
@@ -106,15 +119,18 @@ export function AddressFields({
       detach();
       setMapsReady(false);
     };
-  }, [attach, detach, international]);
+  }, [attach, detach]);
 
   return (
     <div className="min-w-0 w-full max-w-full">
       <div className="text-[13px] tracking-[.1em] text-neutral-500 mb-2 flex items-center gap-2" style={{ fontFamily: HEAD }}>
         <MapPin size={14} /> DELIVERY ADDRESS
       </div>
-      {!international && mapsKey() && mapsReady && (
-        <p className="text-[12px] text-neutral-500 mb-2">Start typing your street — pick a suggestion to autofill the rest.</p>
+      {mapsKey() && mapsReady && (
+        <p className="text-[12px] text-neutral-500 mb-2">
+          Start typing your street — pick a suggestion to autofill the rest.
+          {!international && " Addresses outside South Africa switch to international shipping automatically."}
+        </p>
       )}
       {mapsError && <p className="text-[12px] text-amber-700 mb-2">{mapsError}</p>}
 

@@ -40,6 +40,8 @@ export function orderEmailVariables(order = {}, status) {
     status: status || order.status || null,
     delivery: order.delivery || null,
     date: order.date || null,
+    confirmUrl: order.confirmUrl || null,
+    declineUrl: order.declineUrl || null,
   };
 }
 

@@ -81,10 +81,19 @@ function loadLocalOrders() {
 
 function statusSteps(status) {
   const order = ["Processing", "Paid", "Shipped", "Delivered"];
+  const key = String(status || "").toLowerCase();
   const normalised = {
-    pending: "Processing", processing: "Processing", paid: "Paid",
-    shipped: "Shipped", delivered: "Delivered",
-  }[String(status || "").toLowerCase()] || status;
+    pending: "Processing",
+    processing: "Processing",
+    awaiting_quote: "Processing",
+    quote_sent: "Processing",
+    quote_accepted: "Processing",
+    "waiting on shipping quote": "Processing",
+    "shipping quote sent": "Processing",
+    paid: "Paid",
+    shipped: "Shipped",
+    delivered: "Delivered",
+  }[key] || status;
   const idx = Math.max(0, order.indexOf(normalised));
   return order.map((label, i) => ({ label, done: i <= idx, current: i === idx }));
 }

@@ -1,0 +1,8 @@
+-- Optional: no schema change required — quote_token lives in orders.delivery JSON.
+-- Status values used by the app (text column):
+--   awaiting_quote | quote_sent | quote_accepted | pending | paid | shipped | delivered | cancelled | refunded
+--
+-- If your orders.status column uses a Postgres enum, extend it first, e.g.:
+--   alter type order_status add value if not exists 'awaiting_quote';
+--   alter type order_status add value if not exists 'quote_sent';
+--   alter type order_status add value if not exists 'quote_accepted';

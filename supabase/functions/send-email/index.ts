@@ -59,6 +59,8 @@ const ORDER_TEMPLATES = new Set([
   "delivered",
   "cancelled",
   "refunded",
+  "awaiting_quote",
+  "quote_sent",
 ]);
 
 const STATUS_COPY: Record<
@@ -135,6 +137,22 @@ const STATUS_COPY: Record<
       `A refund for order <strong style="color:${BRAND.ink}">${id}</strong> has been processed.`,
     footer: "Allow a few business days for it to appear on your statement.",
   },
+  awaiting_quote: {
+    eyebrow: "WAITING ON SHIPPING QUOTE",
+    title: "We've received your international order",
+    subject: (id) => `Waiting on shipping quote — ${id}`,
+    intro: (id) =>
+      `Thank you — order <strong style="color:${BRAND.ink}">${id}</strong> is with us. We're preparing an international shipping quote and will email you shortly.`,
+    footer: "No payment is due until you accept the shipping quote.",
+  },
+  quote_sent: {
+    eyebrow: "SHIPPING QUOTE READY",
+    title: "Your international shipping quote",
+    subject: (id) => `Shipping quote ready — ${id}`,
+    intro: (id) =>
+      `Your shipping quote for order <strong style="color:${BRAND.ink}">${id}</strong> is ready. Please confirm you're happy to proceed, or decline to cancel.`,
+    footer: "Accepting takes you back to checkout with shipping included so you can pay securely.",
+  },
 };
 
 function escapeHtml(value: unknown) {
@@ -183,6 +201,19 @@ function itemThumbHtml(imageUrl: unknown, name: string) {
     return `<img src="${escapeHtml(src)}" alt="${escapeHtml(name || "Print")}" width="64" height="64" style="display:block;width:64px;height:64px;object-fit:cover;border-radius:4px;background:${BRAND.wall};border:0;" />`;
   }
   return `<div style="width:64px;height:64px;border-radius:4px;background:${BRAND.wall};border:1px solid ${BRAND.line};"></div>`;
+}
+
+function actionButtonsHtml(vars: Record<string, unknown>) {
+  const confirmUrl = scrub(vars.confirmUrl, 500);
+  const declineUrl = scrub(vars.declineUrl, 500);
+  if (!confirmUrl && !declineUrl) return "";
+  const confirm = confirmUrl
+    ? `<td style="padding-right:10px;"><a href="${escapeHtml(confirmUrl)}" style="display:inline-block;padding:12px 20px;background:${BRAND.green};color:${BRAND.white};text-decoration:none;font-family:Jost,Poppins,Arial,sans-serif;font-size:12px;letter-spacing:0.12em;border-radius:4px;">ACCEPT &amp; PAY</a></td>`
+    : "";
+  const decline = declineUrl
+    ? `<td><a href="${escapeHtml(declineUrl)}" style="display:inline-block;padding:12px 20px;border:1px solid ${BRAND.line};color:${BRAND.ink};text-decoration:none;font-family:Jost,Poppins,Arial,sans-serif;font-size:12px;letter-spacing:0.12em;border-radius:4px;">DECLINE</a></td>`
+    : "";
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:28px;"><tr>${confirm}${decline}</tr></table>`;
 }
 
 function siteUrl() {
@@ -342,9 +373,9 @@ function buildOrderEmailHtml(template: string, vars: Record<string, unknown>) {
           ${trackingBlock}
           ${deliveryBlock}
           <p style="margin:28px 0 0;font-family:Poppins,Arial,sans-serif;font-size:13px;line-height:1.55;color:${BRAND.gray};">${escapeHtml(copy.footer)}</p>
-          <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:28px;"><tr><td style="background:${BRAND.green};border-radius:4px;">
+          ${actionButtonsHtml(vars) || `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:28px;"><tr><td style="background:${BRAND.green};border-radius:4px;">
             <a href="${escapeHtml(site)}/account" style="display:inline-block;padding:12px 22px;font-family:Jost,Poppins,Arial,sans-serif;font-size:12px;letter-spacing:0.12em;color:${BRAND.white};text-decoration:none;">VIEW YOUR ORDERS</a>
-          </td></tr></table>
+          </td></tr></table>`}
         </td></tr>
         <tr><td style="background:${BRAND.dark};padding:24px 28px;text-align:center;">
           <div style="font-family:Jost,Poppins,Arial,sans-serif;font-size:12px;letter-spacing:0.12em;margin-bottom:10px;">

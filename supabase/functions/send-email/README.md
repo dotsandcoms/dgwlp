@@ -4,7 +4,7 @@ Supabase Edge Function that sends branded Doron Goldstein Photography order emai
 
 ## Templates
 
-`receipt` · `pending` · `paid` · `shipping` · `shipped` · `delivered` · `cancelled` · `refunded`
+`receipt` · `pending` · `paid` · `shipping` · `shipped` · `delivered` · `cancelled` · `refunded` · `awaiting_quote` · `quote_sent`
 
 ## Invoke
 

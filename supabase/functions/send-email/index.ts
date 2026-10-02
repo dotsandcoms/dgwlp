@@ -49,8 +49,7 @@ const MATERIAL_LABEL: Record<string, string> = {
 const FRAME_LABEL: Record<string, string> = {
   black: "Black",
   white: "White",
-  oak: "Oak",
-  walnut: "Walnut",
+  oak: "Walnut",
 };
 
 const ORDER_TEMPLATES = new Set([

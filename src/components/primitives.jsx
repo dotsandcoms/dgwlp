@@ -78,13 +78,6 @@ function frameFill(frame) {
       backgroundPosition: "center",
     };
   }
-  if (frame.id === "oak") {
-    return {
-      backgroundColor: frame.c,
-      backgroundImage:
-        "linear-gradient(110deg, rgba(255,255,255,.18) 0 8%, transparent 8% 22%, rgba(0,0,0,.08) 22% 30%, transparent 30% 55%, rgba(255,255,255,.12) 55% 62%, transparent 62%), linear-gradient(0deg, rgba(0,0,0,.06), transparent 40%)",
-    };
-  }
   return { background: frame.c };
 }
 

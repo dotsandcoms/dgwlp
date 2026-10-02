@@ -68,17 +68,153 @@ export function Scene({ room }) {
   );
 }
 
+function frameFill(frame) {
+  if (!frame) return { background: "#1a1a1a" };
+  if (frame.swatch) {
+    return {
+      backgroundColor: frame.c,
+      backgroundImage: `url(${frame.swatch})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }
+  return { background: frame.c };
+}
+
 export const artworkStyle = (matId, frameCol) => {
-  const c = FRAME_COLOURS.find((f) => f.id === frameCol)?.c || "#141414";
+  const frame = FRAME_COLOURS.find((f) => f.id === frameCol) || FRAME_COLOURS[0];
+  const c = frame.c || "#141414";
   switch (matId) {
-    case "paper": return { padding: 6, background: "#fff", boxShadow: "0 14px 30px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.08)", border: "1px solid #ececec" };
-    case "paper_framed": return { border: `11px solid ${c}`, background: "#fff", padding: 10, boxShadow: "0 18px 42px rgba(0,0,0,.28), 0 2px 6px rgba(0,0,0,.1)" };
-    case "canvas_rolled": return { boxShadow: "0 12px 26px rgba(0,0,0,.20)" };
-    case "canvas_framed": return { border: `9px solid ${c}`, padding: 4, background: c, boxShadow: "0 18px 42px rgba(0,0,0,.28)" };
-    case "canvas_mounted": return { boxShadow: "6px 6px 0 rgba(0,0,0,.1), 0 20px 40px rgba(0,0,0,.26)" };
-    default: return {};
+    case "paper":
+      return { padding: 6, background: "#fff", boxShadow: "0 14px 30px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.08)", border: "1px solid #ececec" };
+    case "paper_framed":
+      return { border: `11px solid ${c}`, background: "#fff", padding: 10, boxShadow: "0 18px 42px rgba(0,0,0,.28), 0 2px 6px rgba(0,0,0,.1)" };
+    case "canvas_rolled":
+      return { boxShadow: "0 12px 26px rgba(0,0,0,.20)" };
+    case "canvas_framed":
+      return { border: `9px solid ${c}`, padding: 4, background: c, boxShadow: "0 18px 42px rgba(0,0,0,.28)" };
+    case "canvas_mounted":
+      return { boxShadow: "6px 6px 0 rgba(0,0,0,.1), 0 20px 40px rgba(0,0,0,.26)" };
+    default:
+      return {};
   }
 };
+
+/**
+ * Studio product preview — image + mat + moulding update with framing options
+ * (Pixalot-style wall mockup on a neutral ground).
+ */
+export function PrintPreview({
+  product,
+  material,
+  frameCol,
+  printColour,
+  aspectRatio = "3 / 2",
+  className,
+  style,
+  onClick,
+  title,
+}) {
+  const frame = FRAME_COLOURS.find((f) => f.id === frameCol) || FRAME_COLOURS[0];
+  const matId = material || "paper";
+  const isPaperFramed = matId === "paper_framed";
+  const isCanvasFramed = matId === "canvas_framed";
+  const isMounted = matId === "canvas_mounted";
+  const isRolled = matId === "canvas_rolled";
+  const isPaper = matId === "paper";
+  const framed = isPaperFramed || isCanvasFramed;
+  const moulding = frameFill(frame);
+  const whiteFrame = frame.id === "white";
+  const Tag = onClick ? "button" : "div";
+
+  const pieceShadow = framed || isMounted
+    ? "0 22px 48px rgba(0,0,0,.22), 0 6px 14px rgba(0,0,0,.1)"
+    : "0 14px 28px rgba(0,0,0,.14)";
+
+  return (
+    <Tag
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      title={title}
+      className={className}
+      style={{
+        display: "block",
+        width: "100%",
+        margin: 0,
+        padding: "clamp(28px, 7%, 56px) clamp(24px, 6%, 48px)",
+        border: `1px solid ${C.line}`,
+        borderRadius: 4,
+        background:
+          "linear-gradient(180deg, #ececeb 0%, #e4e4e2 55%, #dededd 100%)",
+        cursor: onClick ? "zoom-in" : "default",
+        textAlign: "left",
+        transition: "background .35s ease",
+        ...style,
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          margin: "0 auto",
+          transition: "box-shadow .35s ease, transform .35s ease",
+          boxShadow: pieceShadow,
+          ...(framed
+            ? {
+                ...moulding,
+                padding: isPaperFramed
+                  ? "clamp(10px, 2.2%, 16px)"
+                  : "clamp(8px, 1.8%, 14px)",
+                boxShadow: `${pieceShadow}${whiteFrame ? ", inset 0 0 0 1px rgba(0,0,0,.08)" : ""}`,
+              }
+            : isMounted
+              ? {
+                  background: "#111",
+                  padding: "0 0 5px 0",
+                  boxShadow: "8px 8px 0 rgba(0,0,0,.12), 0 22px 44px rgba(0,0,0,.24)",
+                }
+              : isPaper
+                ? {
+                    background: "#fff",
+                    padding: 8,
+                    border: "1px solid #ececec",
+                  }
+                : isRolled
+                  ? { background: "#111" }
+                  : {}),
+        }}
+      >
+        {/* White window mount for framed paper prints */}
+        <div
+          style={
+            isPaperFramed
+              ? {
+                  background: "#fff",
+                  padding: "clamp(18px, 7.5%, 52px)",
+                  boxShadow: "inset 0 0 0 1px rgba(0,0,0,.04)",
+                }
+              : isCanvasFramed
+                ? {
+                    background: "#0d0d0d",
+                    padding: "clamp(4px, 1%, 8px)",
+                  }
+                : undefined
+          }
+        >
+          <Plate
+            product={product}
+            printColour={printColour}
+            style={{
+              width: "100%",
+              aspectRatio,
+              display: "block",
+              boxShadow: isMounted ? "inset 0 0 0 1px rgba(255,255,255,.06)" : undefined,
+            }}
+          />
+        </div>
+      </div>
+    </Tag>
+  );
+}
 
 export function RoomPreview({ product, size, material, frameCol, room, onZoom, printColour }) {
   const place = artPlacement(size, room, product.ratio);

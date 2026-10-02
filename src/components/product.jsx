@@ -6,7 +6,7 @@ import { X, Minus, Plus, Truck, Heart, ArrowLeft } from "lucide-react";
 import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, sizeLabel, priceOfVariant, availableSizesOf, availableMaterialsFor, colourFromCategory } from "@/lib/pricing";
 import { freeShippingLabel, DEFAULT_SETTINGS, internationalShippingNote } from "@/lib/settings";
 import { useDisplayCurrency } from "@/lib/use-public-settings";
-import { Plate, OptionButtons, Pill } from "./primitives";
+import { PrintPreview, OptionButtons, Pill } from "./primitives";
 import { useCart, useToast } from "@/context/providers";
 
 const COLOUR_LABEL = { bw: "Black & White", colour: "Colour" };
@@ -183,24 +183,20 @@ export function ProductDetail({ product }) {
       </div>
       <div className="grid md:grid-cols-2 gap-10">
         <div>
-          <button
-            type="button"
+          <PrintPreview
+            product={product}
+            material={material}
+            frameCol={frameCol}
+            printColour={printColour}
+            aspectRatio={ratioMeta.ar}
             onClick={openZoom}
             title="View full size"
-            className="block overflow-hidden text-left mx-auto"
             style={{
-              borderRadius: 4,
-              border: `1px solid ${C.line}`,
-              cursor: "zoom-in",
               width: isPortrait ? "80%" : "100%",
+              marginLeft: isPortrait ? "auto" : undefined,
+              marginRight: isPortrait ? "auto" : undefined,
             }}
-          >
-            <Plate
-              product={product}
-              printColour={printColour}
-              style={{ width: "100%", aspectRatio: ratioMeta.ar }}
-            />
-          </button>
+          />
         </div>
 
         <div>
@@ -290,18 +286,21 @@ export function ProductDetail({ product }) {
             style={{ maxHeight: "100%" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <Plate
-              product={product}
-              printColour={printColour}
-              fit="contain"
+            <div
               style={{
                 width: `min(92vw, 900px, calc((100dvh - 88px) * ${arW} / ${arH}))`,
                 maxHeight: "calc(100dvh - 88px)",
-                aspectRatio: ratioMeta.ar,
-                borderRadius: 4,
-                backgroundColor: "#1a1a18",
               }}
-            />
+            >
+              <PrintPreview
+                product={product}
+                material={material}
+                frameCol={frameCol}
+                printColour={printColour}
+                aspectRatio={ratioMeta.ar}
+                style={{ border: "none", background: "transparent", padding: "clamp(12px, 3%, 28px)" }}
+              />
+            </div>
             <p className="text-center text-white/70 text-[13px] mt-3 px-2 shrink-0" style={{ fontFamily: HEAD, letterSpacing: ".1em" }}>
               {product.name.toUpperCase()} · {colourLabel.toUpperCase()}
             </p>

@@ -1,30 +1,34 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, Minus, Plus, Truck, Heart, ArrowLeft } from "lucide-react";
-import { C, HEAD, RATIOS, MATERIALS, FRAME_COLOURS, sizeLabel, priceOfVariant, availableSizesOf, availableMaterialsFor, colourFromCategory } from "@/lib/pricing";
+import {
+  C,
+  HEAD,
+  RATIOS,
+  MATERIALS,
+  FRAME_COLOURS,
+  FRAMING_LABEL,
+  FRAMING_ORDER,
+  sizeLabel,
+  priceOfVariant,
+  availableSizesOf,
+  availableMaterialsFor,
+  colourFromCategory,
+} from "@/lib/pricing";
 import { freeShippingLabel, DEFAULT_SETTINGS, internationalShippingNote } from "@/lib/settings";
 import { useDisplayCurrency } from "@/lib/use-public-settings";
-import { Plate, OptionButtons, Pill } from "./primitives";
+import { PrintPreview, OptionButtons, Pill } from "./primitives";
 import { useCart, useToast } from "@/context/providers";
 
 const COLOUR_LABEL = { bw: "Black & White", colour: "Colour" };
 
-const PRINT_TYPES = [
-  { id: "paper", label: "Paper" },
-  { id: "canvas", label: "Canvas" },
-];
-
-/** @returns {"paper"|"canvas"} */
-function printTypeOf(matId) {
-  return String(matId || "").startsWith("canvas") ? "canvas" : "paper";
-}
-
-/** Finish label without the Paper/Canvas prefix. */
-function finishLabel(mat) {
-  const raw = mat.label.replace(/^(Paper|Canvas)\s*[—–-]\s*/, "");
-  return raw.replace(/\b\w/g, (c) => c.toUpperCase());
+function sortFramingOptions(mats) {
+  return [...mats].sort(
+    (a, b) =>
+      (FRAMING_ORDER.indexOf(a.id) + 1 || 99) - (FRAMING_ORDER.indexOf(b.id) + 1 || 99),
+  );
 }
 
 export function ProductDetail({ product }) {
@@ -37,12 +41,12 @@ export function ProductDetail({ product }) {
     ? product.colour
     : colourFromCategory(product.category);
   const [size, setSize] = useState(sizes[0] || "");
-  const matsForSize = availableMaterialsFor(product, size);
-  const availableTypes = PRINT_TYPES.filter((t) => matsForSize.some((m) => printTypeOf(m.id) === t.id));
-  const [printType, setPrintType] = useState(() => printTypeOf(matsForSize[0]?.id || "paper"));
-  const finishesForType = matsForSize.filter((m) => printTypeOf(m.id) === printType);
-  const [material, setMaterial] = useState(finishesForType[0]?.id || matsForSize[0]?.id || "paper");
-  const [frameCol, setFrameCol] = useState("black");
+  const matsForSize = useMemo(
+    () => sortFramingOptions(availableMaterialsFor(product, size)),
+    [product, size],
+  );
+  const [material, setMaterial] = useState(matsForSize[0]?.id || "paper");
+  const [frameCol, setFrameCol] = useState("walnut");
   const [qty, setQty] = useState(1);
   const [wish, setWish] = useState(false);
   const [zoom, setZoom] = useState(false);
@@ -51,12 +55,10 @@ export function ProductDetail({ product }) {
 
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem("dg_wish") || "[]"); setWish(s.includes(product.id)); } catch {} }, [product.id]);
   useEffect(() => {
-    const types = PRINT_TYPES.filter((t) => matsForSize.some((m) => printTypeOf(m.id) === t.id));
-    const nextType = types.some((t) => t.id === printType) ? printType : (types[0]?.id || "paper");
-    if (nextType !== printType) setPrintType(nextType);
-    const finishes = matsForSize.filter((m) => printTypeOf(m.id) === nextType);
-    if (!finishes.some((m) => m.id === material)) setMaterial(finishes[0]?.id || matsForSize[0]?.id || "paper");
-  }, [size]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!matsForSize.some((m) => m.id === material)) {
+      setMaterial(matsForSize[0]?.id || "paper");
+    }
+  }, [size, matsForSize, material]);
   useEffect(() => {
     let cancelled = false;
     fetch("/api/settings")
@@ -82,10 +84,12 @@ export function ProductDetail({ product }) {
   const mat = MATERIALS.find((m) => m.id === material) || MATERIALS[0];
   const unit = priceOfVariant(product, size, material);
   const colourLabel = COLOUR_LABEL[printColour] || COLOUR_LABEL.bw;
+  const framingLabel = FRAMING_LABEL[mat.id] || mat.label;
+  const frameLabel = FRAME_COLOURS.find((f) => f.id === frameCol)?.label;
   const summary = [
     sizeLabel(size),
-    mat.label,
-    mat.framed ? FRAME_COLOURS.find((f) => f.id === frameCol)?.label + " frame" : null,
+    framingLabel,
+    mat.framed && frameLabel ? `${frameLabel} frame` : null,
   ].filter(Boolean).join(" · ");
 
   const shopHref = product.category
@@ -138,7 +142,7 @@ export function ProductDetail({ product }) {
       name: product.name,
       size,
       material,
-      frameCol,
+      frameCol: mat.framed ? frameCol : null,
       printColour,
       price: unit,
       qty,
@@ -183,24 +187,27 @@ export function ProductDetail({ product }) {
       </div>
       <div className="grid md:grid-cols-2 gap-10">
         <div>
-          <button
-            type="button"
+          <PrintPreview
+            product={product}
+            material={material}
+            frameCol={frameCol}
+            printColour={printColour}
+            aspectRatio={ratioMeta.ar}
             onClick={openZoom}
             title="View full size"
-            className="block overflow-hidden text-left mx-auto"
             style={{
-              borderRadius: 4,
-              border: `1px solid ${C.line}`,
-              cursor: "zoom-in",
               width: isPortrait ? "80%" : "100%",
+              marginLeft: isPortrait ? "auto" : undefined,
+              marginRight: isPortrait ? "auto" : undefined,
             }}
+          />
+          <p
+            className="mt-3 text-center text-[12px] text-neutral-500 tracking-[0.04em]"
+            style={{ fontFamily: HEAD }}
           >
-            <Plate
-              product={product}
-              printColour={printColour}
-              style={{ width: "100%", aspectRatio: ratioMeta.ar }}
-            />
-          </button>
+            {framingLabel}
+            {mat.framed && frameLabel ? ` · ${frameLabel} frame` : ""}
+          </p>
         </div>
 
         <div>
@@ -214,37 +221,18 @@ export function ProductDetail({ product }) {
           <p className="text-[15px] leading-relaxed text-neutral-700 mb-8">{product.desc}</p>
 
           <OptionButtons label="Size" value={size} onChange={setSize} options={sizes.map((s) => ({ value: s, label: sizeLabel(s) }))} />
-          {availableTypes.length > 1 ? (
-            <OptionButtons
-              label="Print"
-              value={printType}
-              onChange={(v) => {
-                setPrintType(v);
-                const finishes = matsForSize.filter((m) => printTypeOf(m.id) === v);
-                if (!finishes.some((m) => m.id === material)) setMaterial(finishes[0]?.id || "paper");
-              }}
-              options={availableTypes.map((t) => ({ value: t.id, label: t.label }))}
-            />
-          ) : availableTypes.length === 1 ? (
-            <OptionButtons
-              label="Print"
-              value={availableTypes[0].id}
-              onChange={() => {}}
-              options={[{ value: availableTypes[0].id, label: availableTypes[0].label }]}
-            />
-          ) : null}
           <OptionButtons
-            label="Finish"
+            label="Framing"
             value={material}
             onChange={setMaterial}
-            options={finishesForType.map((m) => ({
+            options={matsForSize.map((m) => ({
               value: m.id,
-              label: finishLabel(m),
+              label: FRAMING_LABEL[m.id] || m.label,
             }))}
           />
           {mat.framed && (
             <OptionButtons
-              label="Frame colour"
+              label="Frame Colour"
               value={frameCol}
               onChange={setFrameCol}
               options={FRAME_COLOURS.map((f) => ({
@@ -290,20 +278,24 @@ export function ProductDetail({ product }) {
             style={{ maxHeight: "100%" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <Plate
-              product={product}
-              printColour={printColour}
-              fit="contain"
+            <div
               style={{
                 width: `min(92vw, 900px, calc((100dvh - 88px) * ${arW} / ${arH}))`,
                 maxHeight: "calc(100dvh - 88px)",
-                aspectRatio: ratioMeta.ar,
-                borderRadius: 4,
-                backgroundColor: "#1a1a18",
               }}
-            />
+            >
+              <PrintPreview
+                product={product}
+                material={material}
+                frameCol={frameCol}
+                printColour={printColour}
+                aspectRatio={ratioMeta.ar}
+                style={{ border: "none", background: "transparent", padding: "clamp(12px, 3%, 28px)" }}
+              />
+            </div>
             <p className="text-center text-white/70 text-[13px] mt-3 px-2 shrink-0" style={{ fontFamily: HEAD, letterSpacing: ".1em" }}>
-              {product.name.toUpperCase()} · {colourLabel.toUpperCase()}
+              {product.name.toUpperCase()} · {framingLabel.toUpperCase()}
+              {mat.framed && frameLabel ? ` · ${frameLabel.toUpperCase()}` : ""}
             </p>
           </div>
         </div>

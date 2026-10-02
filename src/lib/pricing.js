@@ -54,9 +54,28 @@ export const PRICING = {
 };
 
 export const FRAME_COLOURS = [
-  { id: "black", label: "Black", c: "#141414" },
-  { id: "white", label: "White", c: "#fdfdfd" },
-  { id: "oak", label: "Walnut", c: "#6d4c35", swatch: "/images/frame-walnut.png" },
+  { id: "black", label: "Black", c: "#1a1a1a" },
+  { id: "white", label: "White", c: "#f7f7f5" },
+  { id: "oak", label: "Oak", c: "#c4a574" },
+  { id: "walnut", label: "Walnut", c: "#6d4c35", swatch: "/images/frame-walnut.png" },
+];
+
+/** Shop-facing framing labels (Pixalot-style). */
+export const FRAMING_LABEL = {
+  paper: "Unframed Print",
+  paper_framed: "Framed Print",
+  canvas_rolled: "Rolled Canvas",
+  canvas_framed: "Framed Canvas",
+  canvas_mounted: "Mounted Canvas",
+};
+
+/** Preferred option order on the product page. */
+export const FRAMING_ORDER = [
+  "canvas_mounted",
+  "paper_framed",
+  "canvas_framed",
+  "paper",
+  "canvas_rolled",
 ];
 
 export const ROOMS = [

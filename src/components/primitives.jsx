@@ -68,17 +68,25 @@ export function Scene({ room }) {
   );
 }
 
-function frameFill(frame) {
-  if (!frame) return { background: "#1a1a1a" };
-  if (frame.swatch) {
-    return {
-      backgroundColor: frame.c,
-      backgroundImage: `url(${frame.swatch})`,
-      backgroundSize: "cover",
-      backgroundPosition: "center",
-    };
-  }
-  return { background: frame.c };
+const WALNUT_MOULDING = "/images/frame-walnut.png";
+
+/** Outer moulding — solid colour border flush to mat/photo (no gap / inset line). */
+function frameMouldingStyle(frame, widthPx) {
+  const w = `${widthPx}px`;
+  const color = frame?.c || "#1a1a1a";
+  // Solid border only — border-image was leaving a dark seam on the inner edge
+  return {
+    borderStyle: "solid",
+    borderWidth: w,
+    borderColor: color,
+    // Subtle wood grain for walnut via inset highlight, not a second ring
+    boxShadow:
+      frame?.id === "oak"
+        ? "inset 0 0 0 1px rgba(255,255,255,.08), 0 14px 32px rgba(0,0,0,.16)"
+        : frame?.id === "white"
+          ? "inset 0 0 0 1px rgba(0,0,0,.08), 0 14px 32px rgba(0,0,0,.16)"
+          : "0 14px 32px rgba(0,0,0,.16)",
+  };
 }
 
 export const artworkStyle = (matId, frameCol) => {
@@ -86,7 +94,7 @@ export const artworkStyle = (matId, frameCol) => {
   const c = frame.c || "#141414";
   switch (matId) {
     case "paper":
-      return { padding: 6, background: "#fff", boxShadow: "0 14px 30px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.08)", border: "1px solid #ececec" };
+      return { boxShadow: "0 14px 30px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.08)" };
     case "paper_framed":
       return { border: `11px solid ${c}`, background: "#fff", padding: 10, boxShadow: "0 18px 42px rgba(0,0,0,.28), 0 2px 6px rgba(0,0,0,.1)" };
     case "canvas_rolled":
@@ -101,8 +109,8 @@ export const artworkStyle = (matId, frameCol) => {
 };
 
 /**
- * Studio product preview — image + mat + moulding update with framing options
- * (Pixalot-style wall mockup on a neutral ground).
+ * Product framing preview — moulding / mat update with finish + frame colour.
+ * No studio grey plate; photo sits flush to mat or frame (no black gap).
  */
 export function PrintPreview({
   product,
@@ -123,13 +131,8 @@ export function PrintPreview({
   const isRolled = matId === "canvas_rolled";
   const isPaper = matId === "paper";
   const framed = isPaperFramed || isCanvasFramed;
-  const moulding = frameFill(frame);
-  const whiteFrame = frame.id === "white";
   const Tag = onClick ? "button" : "div";
-
-  const pieceShadow = framed || isMounted
-    ? "0 22px 48px rgba(0,0,0,.22), 0 6px 14px rgba(0,0,0,.1)"
-    : "0 14px 28px rgba(0,0,0,.14)";
+  const mouldingPx = isPaperFramed ? 14 : 12;
 
   return (
     <Tag
@@ -141,14 +144,16 @@ export function PrintPreview({
         display: "block",
         width: "100%",
         margin: 0,
-        padding: "clamp(28px, 7%, 56px) clamp(24px, 6%, 48px)",
-        border: `1px solid ${C.line}`,
-        borderRadius: 4,
-        background:
-          "linear-gradient(180deg, #ececeb 0%, #e4e4e2 55%, #dededd 100%)",
+        padding: 0,
+        border: "none",
+        borderRadius: 0,
+        background: "transparent",
+        boxShadow: "none",
+        outline: "none",
+        appearance: "none",
+        WebkitAppearance: "none",
         cursor: onClick ? "zoom-in" : "default",
         textAlign: "left",
-        transition: "background .35s ease",
         ...style,
       }}
     >
@@ -156,50 +161,32 @@ export function PrintPreview({
         style={{
           width: "100%",
           margin: "0 auto",
-          transition: "box-shadow .35s ease, transform .35s ease",
-          boxShadow: pieceShadow,
+          transition: "box-shadow .35s ease, border-color .25s ease",
+          background: isPaperFramed ? "#fff" : "transparent",
+          outline: "none",
+          border: "none",
           ...(framed
-            ? {
-                ...moulding,
-                padding: isPaperFramed
-                  ? "clamp(10px, 2.2%, 16px)"
-                  : "clamp(8px, 1.8%, 14px)",
-                boxShadow: `${pieceShadow}${whiteFrame ? ", inset 0 0 0 1px rgba(0,0,0,.08)" : ""}`,
-              }
+            ? frameMouldingStyle(frame, mouldingPx)
             : isMounted
               ? {
                   background: "#111",
-                  padding: "0 0 5px 0",
-                  boxShadow: "8px 8px 0 rgba(0,0,0,.12), 0 22px 44px rgba(0,0,0,.24)",
+                  boxShadow: "6px 6px 0 rgba(0,0,0,.1), 0 18px 36px rgba(0,0,0,.22)",
                 }
-              : isPaper
-                ? {
-                    background: "#fff",
-                    padding: 8,
-                    border: "1px solid #ececec",
-                  }
-                : isRolled
-                  ? { background: "#111" }
-                  : {}),
+              : {
+                  // Unframed: image only — no plate, no mat, no gap
+                  boxShadow: "none",
+                }),
         }}
       >
-        {/* White window mount for framed paper prints */}
-        <div
-          style={
-            isPaperFramed
-              ? {
-                  background: "#fff",
-                  padding: "clamp(18px, 7.5%, 52px)",
-                  boxShadow: "inset 0 0 0 1px rgba(0,0,0,.04)",
-                }
-              : isCanvasFramed
-                ? {
-                    background: "#0d0d0d",
-                    padding: "clamp(4px, 1%, 8px)",
-                  }
-                : undefined
-          }
-        >
+        {isPaperFramed ? (
+          <div style={{ background: "#fff", padding: "clamp(18px, 7.5%, 52px)" }}>
+            <Plate
+              product={product}
+              printColour={printColour}
+              style={{ width: "100%", aspectRatio, display: "block" }}
+            />
+          </div>
+        ) : (
           <Plate
             product={product}
             printColour={printColour}
@@ -207,10 +194,9 @@ export function PrintPreview({
               width: "100%",
               aspectRatio,
               display: "block",
-              boxShadow: isMounted ? "inset 0 0 0 1px rgba(255,255,255,.06)" : undefined,
             }}
           />
-        </div>
+        )}
       </div>
     </Tag>
   );

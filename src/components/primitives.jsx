@@ -219,7 +219,7 @@ export function PrintPreview({
           />
         </div>
       </div>
-    </button>
+    </Tag>
   );
 }
 

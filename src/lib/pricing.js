@@ -54,10 +54,10 @@ export const PRICING = {
 };
 
 export const FRAME_COLOURS = [
-  { id: "black", label: "Black", c: "#1a1a1a" },
-  // Off-white so the moulding stays visible on a white page
-  { id: "white", label: "White", c: "#e9e4db" },
-  { id: "oak", label: "Walnut", c: "#7d634b", swatch: "/images/frame-walnut-swatch.png" },
+  { id: "black", label: "Black", c: "#111111" },
+  // Cool off-white — visible on a white page, not cream
+  { id: "white", label: "White", c: "#e8e8e6" },
+  { id: "oak", label: "Walnut", c: "#6b4428" },
 ];
 
 export const ROOMS = [

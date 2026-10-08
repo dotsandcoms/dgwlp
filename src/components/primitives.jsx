@@ -68,25 +68,72 @@ export function Scene({ room }) {
   );
 }
 
-const WALNUT_MOULDING = "/images/frame-walnut.png";
+const WALNUT_FACE = "/images/frame-walnut.png";
 
-/** Outer moulding — solid colour border flush to mat/photo (no gap / inset line). */
-function frameMouldingStyle(frame, widthPx) {
-  const w = `${widthPx}px`;
-  const color = frame?.c || "#1a1a1a";
-  // Solid border only — border-image was leaving a dark seam on the inner edge
+/** Face fill for the moulding rail (tiled wood grain for walnut). */
+function mouldingFaceFill(frame) {
+  if (!frame) return { background: "#1a1a1a" };
+  if (frame.id === "oak") {
+    return {
+      backgroundColor: frame.c || "#7d634b",
+      backgroundImage: `url(${WALNUT_FACE})`,
+      backgroundSize: "72px 72px",
+      backgroundRepeat: "repeat",
+    };
+  }
+  if (frame.id === "white") {
+    // Warm off-white with a hint of depth so it doesn't vanish on a white page
+    return {
+      background: "linear-gradient(145deg, #f3efe8 0%, #e9e4db 45%, #ddd6cb 100%)",
+    };
+  }
   return {
-    borderStyle: "solid",
-    borderWidth: w,
-    borderColor: color,
-    // Subtle wood grain for walnut via inset highlight, not a second ring
-    boxShadow:
-      frame?.id === "oak"
-        ? "inset 0 0 0 1px rgba(255,255,255,.08), 0 14px 32px rgba(0,0,0,.16)"
-        : frame?.id === "white"
-          ? "inset 0 0 0 1px rgba(0,0,0,.08), 0 14px 32px rgba(0,0,0,.16)"
-          : "0 14px 32px rgba(0,0,0,.16)",
+    background: "linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 40%, #0e0e0e 100%)",
   };
+}
+
+/** Darker tone for the inner rebate / side wall of the moulding. */
+function mouldingRebateColor(frame) {
+  if (!frame) return "#0d0d0d";
+  if (frame.id === "white") return "#cfc7bb";
+  if (frame.id === "oak") return "#3a2616";
+  return "#050505";
+}
+
+/** Outer rim gradient — catches light like a real frame edge. */
+function mouldingOuterRim(frame) {
+  if (frame?.id === "white") {
+    return "linear-gradient(135deg, #faf7f2 0%, #d5cfc4 50%, #b9b1a4 100%)";
+  }
+  if (frame?.id === "oak") {
+    return "linear-gradient(135deg, #a88462 0%, #6b4a32 45%, #3d2818 100%)";
+  }
+  return "linear-gradient(135deg, #3a3a3a 0%, #1a1a1a 45%, #000 100%)";
+}
+
+/**
+ * Strong face bevel — highlight top/left, shade bottom/right (physical moulding).
+ */
+function mouldingBevelShadow(frame) {
+  if (frame?.id === "white") {
+    return [
+      "inset 3px 3px 5px rgba(255,255,255,.95)",
+      "inset -3px -3px 6px rgba(0,0,0,.18)",
+      "inset 0 0 0 1px rgba(0,0,0,.12)",
+    ].join(", ");
+  }
+  if (frame?.id === "oak") {
+    return [
+      "inset 3px 3px 4px rgba(255,255,255,.28)",
+      "inset -3px -3px 6px rgba(0,0,0,.55)",
+      "inset 0 0 0 1px rgba(0,0,0,.35)",
+    ].join(", ");
+  }
+  return [
+    "inset 3px 3px 4px rgba(255,255,255,.22)",
+    "inset -3px -3px 7px rgba(0,0,0,.75)",
+    "inset 0 0 0 1px rgba(0,0,0,.5)",
+  ].join(", ");
 }
 
 export const artworkStyle = (matId, frameCol) => {
@@ -109,8 +156,10 @@ export const artworkStyle = (matId, frameCol) => {
 };
 
 /**
- * Product framing preview — moulding / mat update with finish + frame colour.
- * No studio grey plate; photo sits flush to mat or frame (no black gap).
+ * Product framing preview — real moulding with face + rebate depth (not a flat border).
+ * Paper framed: gallery moulding + white window mat.
+ * Canvas framed: floater box with shadow gap.
+ * White moulding uses off-white so it stays visible on a white page.
  */
 export function PrintPreview({
   product,
@@ -128,11 +177,109 @@ export function PrintPreview({
   const isPaperFramed = matId === "paper_framed";
   const isCanvasFramed = matId === "canvas_framed";
   const isMounted = matId === "canvas_mounted";
-  const isRolled = matId === "canvas_rolled";
-  const isPaper = matId === "paper";
   const framed = isPaperFramed || isCanvasFramed;
   const Tag = onClick ? "button" : "div";
-  const mouldingPx = isPaperFramed ? 14 : 12;
+
+  // Face width of the moulding rail (thicker so the bevel reads)
+  const facePx = isPaperFramed ? 22 : 24;
+  // Inner rebate / lip before mat or floater gap
+  const rebatePx = isCanvasFramed ? 7 : 4;
+
+  const piece = (() => {
+    if (framed) {
+      return (
+        <div
+          style={{
+            width: "100%",
+            // Soft cast shadow under the physical frame
+            boxShadow: "0 22px 48px rgba(0,0,0,.22), 0 6px 14px rgba(0,0,0,.1)",
+            transition: "box-shadow .35s ease",
+          }}
+        >
+          {/* Outer rim — lit edge of the moulding */}
+          <div style={{ background: mouldingOuterRim(frame), padding: 2 }}>
+            {/* Moulding face */}
+            <div
+              style={{
+                ...mouldingFaceFill(frame),
+                padding: facePx,
+                boxShadow: mouldingBevelShadow(frame),
+              }}
+            >
+              {/* Inner rebate wall — depth before the mat / art */}
+              <div
+                style={{
+                  background: mouldingRebateColor(frame),
+                  padding: rebatePx,
+                  boxShadow: isCanvasFramed
+                    ? "inset 2px 3px 10px rgba(0,0,0,.6), inset 0 0 0 1px rgba(0,0,0,.4)"
+                    : "inset 1px 2px 5px rgba(0,0,0,.4)",
+                }}
+              >
+                {isPaperFramed ? (
+                  <div
+                    style={{
+                      background: "#fff",
+                      padding: "clamp(22px, 8.5%, 56px)",
+                      boxShadow: "inset 0 0 0 1px rgba(0,0,0,.04)",
+                    }}
+                  >
+                    <Plate
+                      product={product}
+                      printColour={printColour}
+                      style={{ width: "100%", aspectRatio, display: "block" }}
+                    />
+                  </div>
+                ) : (
+                  // Floater: thin shadow gap — print recessed inside the box
+                  <div
+                    style={{
+                      background: "#1a1510",
+                      padding: "clamp(4px, 0.9%, 7px)",
+                      boxShadow: "inset 0 2px 8px rgba(0,0,0,.5)",
+                    }}
+                  >
+                    <Plate
+                      product={product}
+                      printColour={printColour}
+                      style={{ width: "100%", aspectRatio, display: "block" }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (isMounted) {
+      return (
+        <div
+          style={{
+            width: "100%",
+            background: "#111",
+            boxShadow: "8px 8px 0 rgba(0,0,0,.12), 0 20px 40px rgba(0,0,0,.24)",
+          }}
+        >
+          <Plate
+            product={product}
+            printColour={printColour}
+            style={{ width: "100%", aspectRatio, display: "block" }}
+          />
+        </div>
+      );
+    }
+
+    // Unframed / rolled — full-bleed image, no plate
+    return (
+      <Plate
+        product={product}
+        printColour={printColour}
+        style={{ width: "100%", aspectRatio, display: "block" }}
+      />
+    );
+  })();
 
   return (
     <Tag
@@ -157,47 +304,7 @@ export function PrintPreview({
         ...style,
       }}
     >
-      <div
-        style={{
-          width: "100%",
-          margin: "0 auto",
-          transition: "box-shadow .35s ease, border-color .25s ease",
-          background: isPaperFramed ? "#fff" : "transparent",
-          outline: "none",
-          border: "none",
-          ...(framed
-            ? frameMouldingStyle(frame, mouldingPx)
-            : isMounted
-              ? {
-                  background: "#111",
-                  boxShadow: "6px 6px 0 rgba(0,0,0,.1), 0 18px 36px rgba(0,0,0,.22)",
-                }
-              : {
-                  // Unframed: image only — no plate, no mat, no gap
-                  boxShadow: "none",
-                }),
-        }}
-      >
-        {isPaperFramed ? (
-          <div style={{ background: "#fff", padding: "clamp(18px, 7.5%, 52px)" }}>
-            <Plate
-              product={product}
-              printColour={printColour}
-              style={{ width: "100%", aspectRatio, display: "block" }}
-            />
-          </div>
-        ) : (
-          <Plate
-            product={product}
-            printColour={printColour}
-            style={{
-              width: "100%",
-              aspectRatio,
-              display: "block",
-            }}
-          />
-        )}
-      </div>
+      {piece}
     </Tag>
   );
 }
@@ -345,7 +452,10 @@ export function OptionButtons({ label, value, options, onChange }) {
                     backgroundImage: o.swatch ? `url(${o.swatch})` : undefined,
                     backgroundSize: "cover",
                     backgroundPosition: "center",
-                    boxShadow: o.color === "#fdfdfd" ? "inset 0 0 0 1px rgba(0,0,0,.08)" : undefined,
+                    boxShadow:
+                      o.color === "#fdfdfd" || o.color === "#e9e4db"
+                        ? "inset 0 0 0 1px rgba(0,0,0,.12)"
+                        : undefined,
                   }}
                 />
               )}

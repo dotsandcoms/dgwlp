@@ -68,14 +68,115 @@ export function Scene({ room }) {
   );
 }
 
-/**
- * Clean gallery frame — solid colour, even on all sides.
- * No photo texture (a tiled crop was striping the walnut rails).
- */
-function frameFace(frame) {
-  return { background: frame?.c || "#111111" };
+function lighten(hex, pct) {
+  return mixHex(hex, "#ffffff", pct / 100);
+}
+function darken(hex, pct) {
+  return mixHex(hex, "#000000", pct / 100);
+}
+function mixHex(a, b, t) {
+  const pa = parseHex(a);
+  const pb = parseHex(b);
+  if (!pa || !pb) return a;
+  const m = (i) => Math.round(pa[i] + (pb[i] - pa[i]) * t);
+  return `#${[m(0), m(1), m(2)].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+}
+function parseHex(hex) {
+  const h = String(hex || "").replace("#", "");
+  if (h.length !== 6) return null;
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
 }
 
+/** Painted moulding face (CSS bevel — used when no photo border). */
+function paintedMoulding(frame) {
+  const base = frame?.c || "#141414";
+  return {
+    background: `linear-gradient(145deg,
+      ${lighten(base, 28)} 0%,
+      ${lighten(base, 10)} 22%,
+      ${base} 48%,
+      ${darken(base, 12)} 78%,
+      ${darken(base, 22)} 100%)`,
+  };
+}
+
+/**
+ * Gallery frame. Walnut uses a photographed moulding via border-image
+ * (mitered corners + grain along each rail). Paint finishes use CSS bevel.
+ * Paper gets a white mat; canvas sits flush — never a black page behind the print.
+ */
+function FrameShell({ frame, facePx = 16, hasMat = false, matPad, children, compact = false }) {
+  const face = Math.max(compact ? 9 : 12, facePx);
+  const isWhite = frame?.id === "white";
+  const hasPhotoMoulding = Boolean(frame?.borderImage);
+  const mat = hasMat ? (matPad ?? (compact ? 14 : "clamp(16px, 6.5%, 44px)")) : 0;
+  const drop = compact
+    ? "0 10px 24px rgba(0,0,0,.22), 0 2px 6px rgba(0,0,0,.12)"
+    : "0 20px 44px rgba(0,0,0,.24), 0 4px 10px rgba(0,0,0,.1)";
+
+  const window = (
+    <div
+      style={{
+        background: hasMat ? "#fff" : "transparent",
+        padding: mat,
+        boxShadow: hasMat
+          ? "inset 0 0 0 1px rgba(0,0,0,.28)"
+          : "inset 0 0 0 1px rgba(0,0,0,.45)",
+      }}
+    >
+      {children}
+    </div>
+  );
+
+  if (hasPhotoMoulding) {
+    const slice = Number(frame.borderSlice) || 128;
+    return (
+      <div
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          borderStyle: "solid",
+          borderWidth: face,
+          borderColor: frame.c || "#141414",
+          borderImageSource: `url(${frame.borderImage})`,
+          borderImageSlice: slice,
+          borderImageWidth: face,
+          borderImageRepeat: "stretch",
+          boxShadow: drop,
+        }}
+      >
+        {window}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: face,
+        ...paintedMoulding(frame),
+        boxShadow: compact
+          ? `${drop},
+             inset 0 1px 0 ${isWhite ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.28)"},
+             inset 0 -1px 0 ${isWhite ? "rgba(0,0,0,.1)" : "rgba(0,0,0,.4)"},
+             inset 1px 0 0 ${isWhite ? "rgba(255,255,255,.55)" : "rgba(255,255,255,.12)"},
+             inset -1px 0 0 ${isWhite ? "rgba(0,0,0,.08)" : "rgba(0,0,0,.35)"}`
+          : `${drop},
+             inset 0 1.5px 0 ${isWhite ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.3)"},
+             inset 0 -1.5px 0 ${isWhite ? "rgba(0,0,0,.12)" : "rgba(0,0,0,.45)"},
+             inset 1.5px 0 0 ${isWhite ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.14)"},
+             inset -1.5px 0 0 ${isWhite ? "rgba(0,0,0,.1)" : "rgba(0,0,0,.4)"}`,
+        outline: isWhite ? "1px solid #c8c8c4" : "none",
+      }}
+    >
+      {window}
+    </div>
+  );
+}
+
+/** @deprecated Prefer PrintPreview — kept for any residual callers. */
 export const artworkStyle = (matId, frameCol) => {
   const frame = FRAME_COLOURS.find((f) => f.id === frameCol) || FRAME_COLOURS[0];
   const c = frame.c || "#141414";
@@ -96,9 +197,8 @@ export const artworkStyle = (matId, frameCol) => {
 };
 
 /**
- * Gallery frame preview matching a simple Pixalot-style moulding:
- * solid face, white window mat on paper, print flush on canvas, soft drop shadow.
- * White is a cool off-white so it stays visible on a white page.
+ * Gallery frame preview: bevelled moulding, white window mat on paper,
+ * print flush on canvas, soft drop shadow.
  */
 export function PrintPreview({
   product,
@@ -110,6 +210,7 @@ export function PrintPreview({
   style,
   onClick,
   title,
+  compact = false,
 }) {
   const frame = FRAME_COLOURS.find((f) => f.id === frameCol) || FRAME_COLOURS[0];
   const matId = material || "paper";
@@ -118,37 +219,19 @@ export function PrintPreview({
   const framed = isPaperFramed || matId === "canvas_framed";
   const Tag = onClick ? "button" : "div";
 
-  const facePx = isPaperFramed ? 16 : 14;
+  const facePx = compact ? (isPaperFramed ? 11 : 10) : (isPaperFramed ? 20 : 16);
 
   const piece = (() => {
     if (framed) {
       return (
-        <div
-          style={{
-            width: "100%",
-            ...frameFace(frame),
-            padding: facePx,
-            boxShadow: "0 16px 36px rgba(0,0,0,.16), 0 2px 6px rgba(0,0,0,.06)",
-            outline: frame?.id === "white" ? "1px solid #d4d4d2" : "none",
-            outlineOffset: 0,
-          }}
-        >
-          {isPaperFramed ? (
-            <div style={{ background: "#ffffff", padding: "clamp(20px, 8%, 52px)" }}>
-              <Plate
-                product={product}
-                printColour={printColour}
-                style={{ width: "100%", aspectRatio, display: "block" }}
-              />
-            </div>
-          ) : (
-            <Plate
-              product={product}
-              printColour={printColour}
-              style={{ width: "100%", aspectRatio, display: "block" }}
-            />
-          )}
-        </div>
+        <FrameShell frame={frame} facePx={facePx} hasMat={isPaperFramed} compact={compact}>
+          <Plate
+            product={product}
+            printColour={printColour}
+            fit="cover"
+            style={{ width: "100%", aspectRatio, display: "block" }}
+          />
+        </FrameShell>
       );
     }
 
@@ -164,19 +247,23 @@ export function PrintPreview({
           <Plate
             product={product}
             printColour={printColour}
+            fit="cover"
             style={{ width: "100%", aspectRatio, display: "block" }}
           />
         </div>
       );
     }
 
-    // Unframed / rolled — full-bleed image, no plate
+    // Unframed / rolled — full-bleed image, soft paper shadow
     return (
-      <Plate
-        product={product}
-        printColour={printColour}
-        style={{ width: "100%", aspectRatio, display: "block" }}
-      />
+      <div style={{ boxShadow: "0 12px 28px rgba(0,0,0,.16), 0 2px 6px rgba(0,0,0,.06)" }}>
+        <Plate
+          product={product}
+          printColour={printColour}
+          fit="cover"
+          style={{ width: "100%", aspectRatio, display: "block" }}
+        />
+      </div>
     );
   })();
 
@@ -210,6 +297,7 @@ export function PrintPreview({
 
 export function RoomPreview({ product, size, material, frameCol, room, onZoom, printColour }) {
   const place = artPlacement(size, room, product.ratio);
+  const ar = RATIOS[product.ratio]?.ar || "3 / 2";
   return (
     <div style={{ position: "relative", width: "100%", aspectRatio: "4/3", overflow: "hidden", borderRadius: 4, border: `1px solid ${C.line}`, background: "#e8e4dc" }}>
       <div style={{ position: "absolute", inset: 0 }}>
@@ -229,9 +317,14 @@ export function RoomPreview({ product, size, material, frameCol, room, onZoom, p
           zIndex: 2,
         }}
       >
-        <div style={artworkStyle(material, frameCol)}>
-          <Plate product={product} printColour={printColour} style={{ width: "100%", aspectRatio: RATIOS[product.ratio].ar }} />
-        </div>
+        <PrintPreview
+          product={product}
+          material={material}
+          frameCol={frameCol}
+          printColour={printColour}
+          aspectRatio={ar}
+          compact
+        />
       </div>
       <div
         className="absolute bottom-2 left-2 sm:left-3 sm:bottom-3"

@@ -54,10 +54,29 @@ export const PRICING = {
 };
 
 export const FRAME_COLOURS = [
-  { id: "black", label: "Black", c: "#111111" },
-  // Cool off-white — visible on a white page, not cream
-  { id: "white", label: "White", c: "#e8e8e6" },
-  { id: "oak", label: "Walnut", c: "#6b4428" },
+  {
+    id: "black",
+    label: "Black",
+    c: "#141414",
+    borderImage: "/images/frame-black-border.jpg",
+    borderSlice: 128,
+  },
+  {
+    id: "white",
+    label: "White",
+    c: "#ecece9",
+    borderImage: "/images/frame-white-border.jpg",
+    borderSlice: 128,
+  },
+  {
+    id: "oak",
+    label: "Walnut",
+    c: "#5c3a22",
+    // 9-slice moulding photo — mitered corners, grain along each rail
+    borderImage: "/images/frame-walnut-border.jpg",
+    borderSlice: 128,
+    swatch: "/images/frame-walnut-swatch.png",
+  },
 ];
 
 export const ROOMS = [

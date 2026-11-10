@@ -298,7 +298,7 @@ export function ProductDetail({ product }) {
                 frameCol={frameCol}
                 printColour={printColour}
                 aspectRatio={ratioMeta.ar}
-                style={{ border: "none", background: "transparent", padding: "clamp(12px, 3%, 28px)" }}
+                style={{ border: "none", background: "transparent", padding: 0 }}
               />
             </div>
             <p className="text-center text-white/70 text-[13px] mt-3 px-2 shrink-0" style={{ fontFamily: HEAD, letterSpacing: ".1em" }}>

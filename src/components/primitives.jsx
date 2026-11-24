@@ -118,7 +118,7 @@ function FrameShell({
   const hasPhotoMoulding = Boolean(frame?.borderImage);
   const mat = hasMat ? (matPad ?? (compact ? 14 : "clamp(16px, 6.5%, 44px)")) : 0;
   // Recessed channel between moulding and canvas (floater frame)
-  const floatGap = floater ? (compact ? 5 : 8) : 0;
+  const floatGap = floater ? (compact ? 6 : 10) : 0;
   const drop = compact
     ? "0 10px 24px rgba(0,0,0,.22), 0 2px 6px rgba(0,0,0,.12)"
     : "0 20px 44px rgba(0,0,0,.24), 0 4px 10px rgba(0,0,0,.1)";
@@ -126,18 +126,20 @@ function FrameShell({
   const art = floater ? (
     <div
       style={{
-        // Warm cream reveal (Wild Ginga-style) — not a black channel
-        background: "#f8f7f3",
+        // Recessed tray: warm mid-tone with darker inner shade (shadow gap)
+        background: "linear-gradient(145deg, #9a9084 0%, #6e655c 42%, #4a433c 100%)",
         padding: floatGap,
-        boxShadow: "inset 0 0 0 1px rgba(0,0,0,.08)",
+        boxShadow: compact
+          ? "inset 0 1px 2px rgba(0,0,0,.35), inset 0 -1px 1px rgba(255,255,255,.08)"
+          : "inset 0 2px 4px rgba(0,0,0,.4), inset 0 -1px 2px rgba(255,255,255,.1)",
       }}
     >
       <div
         style={{
-          // Soft depth so the canvas reads as floating in the tray
+          // Canvas lifts off the tray — drop + soft edge for 3D float
           boxShadow: compact
-            ? "0 1px 2px rgba(0,0,0,.12)"
-            : "0 2px 5px rgba(0,0,0,.14)",
+            ? "0 1px 3px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.12)"
+            : "0 3px 8px rgba(0,0,0,.38), 0 1px 2px rgba(0,0,0,.2), 0 0 0 1px rgba(0,0,0,.1)",
         }}
       >
         {children}

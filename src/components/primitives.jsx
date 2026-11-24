@@ -101,20 +101,49 @@ function paintedMoulding(frame) {
 }
 
 /**
- * Gallery frame. Walnut uses a photographed moulding via border-image
- * (mitered corners + grain along each rail). Paint finishes use CSS bevel.
- * Paper gets a white mat; canvas sits flush — never a black page behind the print.
+ * Gallery frame. Photo mouldings use border-image; paint finishes use CSS bevel.
+ * Paper → white mat. Canvas framed → floater gap (dark channel) like Pixalot.
  */
-function FrameShell({ frame, facePx = 16, hasMat = false, matPad, children, compact = false }) {
+function FrameShell({
+  frame,
+  facePx = 16,
+  hasMat = false,
+  floater = false,
+  matPad,
+  children,
+  compact = false,
+}) {
   const face = Math.max(compact ? 9 : 12, facePx);
   const isWhite = frame?.id === "white";
   const hasPhotoMoulding = Boolean(frame?.borderImage);
   const mat = hasMat ? (matPad ?? (compact ? 14 : "clamp(16px, 6.5%, 44px)")) : 0;
+  // Recessed channel between moulding and canvas (floater frame)
+  const floatGap = floater ? (compact ? 5 : 8) : 0;
   const drop = compact
     ? "0 10px 24px rgba(0,0,0,.22), 0 2px 6px rgba(0,0,0,.12)"
     : "0 20px 44px rgba(0,0,0,.24), 0 4px 10px rgba(0,0,0,.1)";
 
-  const window = (
+  const art = floater ? (
+    <div
+      style={{
+        // Warm cream reveal (Wild Ginga-style) — not a black channel
+        background: "#f8f7f3",
+        padding: floatGap,
+        boxShadow: "inset 0 0 0 1px rgba(0,0,0,.08)",
+      }}
+    >
+      <div
+        style={{
+          // Soft depth so the canvas reads as floating in the tray
+          boxShadow: compact
+            ? "0 1px 2px rgba(0,0,0,.12)"
+            : "0 2px 5px rgba(0,0,0,.14)",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  ) : (
     <div
       style={{
         background: hasMat ? "#fff" : "transparent",
@@ -145,7 +174,7 @@ function FrameShell({ frame, facePx = 16, hasMat = false, matPad, children, comp
           boxShadow: drop,
         }}
       >
-        {window}
+        {art}
       </div>
     );
   }
@@ -171,7 +200,7 @@ function FrameShell({ frame, facePx = 16, hasMat = false, matPad, children, comp
         outline: isWhite ? "1px solid #c8c8c4" : "none",
       }}
     >
-      {window}
+      {art}
     </div>
   );
 }
@@ -197,8 +226,7 @@ export const artworkStyle = (matId, frameCol) => {
 };
 
 /**
- * Gallery frame preview: bevelled moulding, white window mat on paper,
- * print flush on canvas, soft drop shadow.
+ * Gallery frame preview: white mat on paper; floater gap on canvas framed.
  */
 export function PrintPreview({
   product,
@@ -215,8 +243,9 @@ export function PrintPreview({
   const frame = FRAME_COLOURS.find((f) => f.id === frameCol) || FRAME_COLOURS[0];
   const matId = material || "paper";
   const isPaperFramed = matId === "paper_framed";
+  const isCanvasFramed = matId === "canvas_framed";
   const isMounted = matId === "canvas_mounted";
-  const framed = isPaperFramed || matId === "canvas_framed";
+  const framed = isPaperFramed || isCanvasFramed;
   const Tag = onClick ? "button" : "div";
 
   const facePx = compact ? (isPaperFramed ? 11 : 10) : (isPaperFramed ? 20 : 16);
@@ -224,7 +253,13 @@ export function PrintPreview({
   const piece = (() => {
     if (framed) {
       return (
-        <FrameShell frame={frame} facePx={facePx} hasMat={isPaperFramed} compact={compact}>
+        <FrameShell
+          frame={frame}
+          facePx={facePx}
+          hasMat={isPaperFramed}
+          floater={isCanvasFramed}
+          compact={compact}
+        >
           <Plate
             product={product}
             printColour={printColour}

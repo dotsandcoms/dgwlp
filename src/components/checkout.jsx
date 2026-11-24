@@ -377,7 +377,7 @@ export function CheckoutFlow() {
                 </div>
               )}
               <h3 className="text-[14px] tracking-[.1em] mb-4" style={{ fontFamily: HEAD }}>PAYMENT METHOD</h3>
-              {[["payfast", "PayFast", "Cards · Instant EFT · SnapScan"], ["paystack", "Paystack", "Cards & bank transfer"]].map(([id, n, d]) => (
+              {[["payfast", "PayFast", "Cards · Instant EFT · SnapScan"], ["peach", "Peach Payments", "Cards & bank transfer"]].map(([id, n, d]) => (
                 <label key={id} className="flex items-center gap-3 p-3 mb-2 cursor-pointer" style={{ border: `1px solid ${pay === id ? C.green : C.line}`, borderRadius: 4 }}>
                   <input type="radio" checked={pay === id} onChange={() => setPay(id)} />
                   <CreditCard size={18} color={C.green} />
@@ -405,7 +405,7 @@ export function CheckoutFlow() {
                   onClick={place}
                   style={{ width: "100%", maxWidth: 360, opacity: placing ? 0.6 : 1, pointerEvents: placing ? "none" : "auto" }}
                 >
-                  {placing ? "Please wait…" : `Pay ${zar(total)} with ${pay === "payfast" ? "PayFast" : "Paystack"}`}
+                  {placing ? "Please wait…" : `Pay ${zar(total)} with ${pay === "payfast" ? "PayFast" : "Peach Payments"}`}
                 </Pill>
               </div>
               <p className="text-[11px] text-neutral-500 mt-3 flex items-center gap-1"><ShieldCheck size={13} /> You'll be redirected to complete payment securely.</p>

@@ -59,17 +59,17 @@ price list. (A full admin "create product" write path is scaffolded in `src/comp
 Server webhooks are scaffolded and mark orders **paid** using the service-role key:
 
 - **PayFast** → `src/app/api/payfast/notify/route.js` (ITN). Add signature + amount validation.
-- **Paystack** → `src/app/api/paystack/webhook/route.js` (HMAC verified).
+- **Peach Payments** → checkout provider id `peach` (legacy `paystack` label mapped in UI).
 
 Set your keys in `.env.local`. Point each provider's notify/webhook URL at
-`https://your-domain/api/payfast/notify` and `/api/paystack/webhook`.
+`https://your-domain/api/payfast/notify` (and your Peach Payments webhook URL).
 Use sandbox credentials while testing.
 
 ---
 
 ## 4. Email (Resend + Supabase `send-email` edge function)
 
-Order emails go out on checkout (receipt), payment confirmation (`paid` from Paystack/PayFast
+Order emails go out on checkout (receipt), payment confirmation (`paid` from Peach Payments/PayFast
 webhooks), and every admin status change. Delivery is handled by the Supabase edge function
 **`send-email`** (same pattern as other Dots projects).
 

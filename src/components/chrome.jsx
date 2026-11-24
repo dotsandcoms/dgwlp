@@ -434,7 +434,7 @@ export function Footer() {
         </div>
         <div className="text-[13px]">
           <div style={{ fontFamily: HEAD }} className="tracking-[.14em] text-white mb-3 text-[12px]">SECURE CHECKOUT</div>
-          <div className="flex items-center gap-2 opacity-80 mb-3"><ShieldCheck size={15} /> PayFast · Paystack</div>
+          <div className="flex items-center gap-2 opacity-80 mb-3"><ShieldCheck size={15} /> PayFast · Peach Payments</div>
           <div style={{ fontFamily: HEAD }} className="tracking-[.14em] text-white mb-3 text-[12px] mt-5">POLICIES</div>
           <button type="button" onClick={() => setLegal("terms")} className="block py-1 opacity-80 hover:opacity-100 text-left">
             Terms &amp; conditions

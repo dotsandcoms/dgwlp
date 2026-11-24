@@ -62,7 +62,7 @@ function fromLastOrder(raw) {
     shipping: raw.shipping ?? 0,
     total: raw.total ?? 0,
     status: raw.status || "Processing",
-    pay: raw.pay === "paystack" ? "Paystack" : raw.pay === "payfast" ? "PayFast" : (raw.pay || "Card"),
+    pay: raw.pay === "peach" || raw.pay === "paystack" ? "Peach Payments" : raw.pay === "payfast" ? "PayFast" : (raw.pay || "Card"),
     tracking: raw.tracking || null,
     delivery: raw.delivery || null,
     lines,

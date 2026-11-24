@@ -61,7 +61,7 @@ export const MOCK_ORDERS = [
     shipping: 300,
     total: 6600,
     status: "Shipped",
-    pay: "Paystack",
+    pay: "Peach Payments",
     tracking: "CN458188204ZA",
     delivery: { street: "14 Rosebank Avenue", suburb: "Parktown North", city: "Johannesburg", province: "Gauteng", postal: "2193" },
     lines: [

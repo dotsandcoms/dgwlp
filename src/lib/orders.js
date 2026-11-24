@@ -210,7 +210,7 @@ function mapDbOrder(row, cartItems) {
       });
 
   const pay =
-    row.payment_provider === "paystack" ? "Paystack"
+    row.payment_provider === "peach" || row.payment_provider === "paystack" ? "Peach Payments"
       : row.payment_provider === "payfast" ? "PayFast"
         : row.payment_provider || "Card";
 

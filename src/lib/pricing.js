@@ -71,11 +71,11 @@ export const FRAME_COLOURS = [
   {
     id: "oak",
     label: "Walnut",
-    c: "#5c3a22",
-    // 9-slice moulding photo — mitered corners, grain along each rail
+    // Light limed / driftwood taupe — matches physical sample
+    c: "#a68d7a",
     borderImage: "/images/frame-walnut-border.jpg",
     borderSlice: 128,
-    swatch: "/images/frame-walnut-swatch.png",
+    swatch: "/images/frame-walnut-swatch.jpg",
   },
 ];
 
